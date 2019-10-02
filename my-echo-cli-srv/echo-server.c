@@ -1,11 +1,14 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <arpa/inet.h>
-#include <netinet/ip.h>
+#include <sys/socket.h> // socket(), bind(), listen(), accept()
+#include <netinet/in.h> // sockaddr_in
+#include <arpa/inet.h>  // socklen_t
+#include <stdio.h>      // perror(), printf(), fprintf()
+#include <stdlib.h>     // exit(), strtoul()
+#include <stdint.h>     // uint16_t
+#include <string.h>     // memset(), strlen()
+#include <unistd.h>     // close()
+
+#define MAX_PENDING_CONNS 10
+#define MAX_LINE 2
 
 
 void exit_on_error(long rc, const char* str)
@@ -20,24 +23,43 @@ void exit_on_error(long rc, const char* str)
 
 int main(int argc, char* argv[])
 {
+    int listenfd;
+    struct sockaddr_in srv_addr;
+    uint16_t srv_port;
+
     if (argc != 2)
     {
-        printf("Usage: ./echo-server PORT\n");
+        printf("Usage: %s PORT\n", argv[0]);
         exit(1);
     }
-    unsigned short port = strtoul(argv[1], NULL, 10);
+
+    char* srv_port_str = argv[1];
+    char* srv_port_str_end;
+    unsigned long srv_port_long = strtoul(srv_port_str, &srv_port_str_end, 0);
+    
+    if (srv_port_str == srv_port_str_end // no conversion
+        || *srv_port_str_end != '\0' // extra junk
+        || srv_port_long < 1024 || srv_port_long > 65535) // out of range
+    {
+        fprintf(stderr,
+            "Invalid port %s, please provide integer in 1024-65535 range\n",
+             argv[1]);
+        exit(1);
+    }
+    srv_port = (uint16_t) srv_port_long;
+
     
     // socket
-    int listenfd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    listenfd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     exit_on_error(listenfd, "socket() failed");
     
     // bind
-    struct sockaddr_in saddr;
-    memset(&saddr, '\0', sizeof(saddr));
-    saddr.sin_family = AF_INET;
-    saddr.sin_port = htons(port);
-    saddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    int rc = bind(listenfd, (struct sockaddr *) &saddr, sizeof(struct sockaddr));
+    memset(&srv_addr, '\0', sizeof(srv_addr));
+    srv_addr.sin_family = AF_INET;
+    srv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    srv_addr.sin_port = htons(srv_port);
+
+    int rc = bind(listenfd, (struct sockaddr *) &srv_addr, sizeof(struct sockaddr));
     exit_on_error(rc, "bind() failed");
     
     // listen
@@ -45,37 +67,42 @@ int main(int argc, char* argv[])
     exit_on_error(rc, "listen() failed");
     printf("Echo server started\n");
     
-    size_t buffer_size = 1024;
-    char buf[buffer_size];
+    char rcv_buf[MAX_LINE];
     
     // accept
-    struct sockaddr_in caddr;
+    struct sockaddr_in cli_addr;
+    socklen_t cli_addr_len = sizeof(cli_addr);
     
     while (1)
     {
-        memset(&buf, 0, sizeof(buf)); // DON'T FORGET THIS
-        memset(&caddr, 0, sizeof(buf)); // DON'T FORGET THIS
+        memset(&rcv_buf, 0, sizeof(rcv_buf)); // DON'T FORGET THIS
+        memset(&cli_addr, 0, sizeof(cli_addr)); // DON'T FORGET THIS
         
-        socklen_t clen = sizeof(struct sockaddr_in);
-        int connfd = accept(listenfd, (struct sockaddr *) &caddr, &clen);
+        int connfd = accept(listenfd, (struct sockaddr *) &cli_addr, &cli_addr_len);
         exit_on_error(connfd, "accept() failed");
         
         char client_addr_str[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &caddr.sin_addr.s_addr, (char *) client_addr_str, INET_ADDRSTRLEN);
-        printf("Client from %s at port %u\n", client_addr_str, ntohs(caddr.sin_port));
+        inet_ntop(AF_INET, &cli_addr.sin_addr.s_addr, (char *) client_addr_str, INET_ADDRSTRLEN);
+        printf("Client from %s at port %u\n", client_addr_str, ntohs(cli_addr.sin_port));
         
         while (1)
         {
-            memset(buf, 0, sizeof(buf)); // DON'T FORGET THIS
-            int n_bytes = (int) read(connfd, &buf, buffer_size);
-            exit_on_error(n_bytes, "read() failed");
-            n_bytes = (int) write(connfd, buf, n_bytes);
-            exit_on_error(n_bytes, "echo write() failed");
-            printf("%s", buf);
+            memset(rcv_buf, 0, sizeof(rcv_buf)); // DON'T FORGET THIS
+            if (read(connfd, rcv_buf, sizeof(rcv_buf)) < 0)
+            {
+                perror("read() failed");
+                break; // if continue, server will crash once client forces an exit
+            }
+            
+            if (write(connfd, rcv_buf, strlen(rcv_buf)+1) < 0)
+            {
+                perror("write() failed");
+            }
         }
         
-//        rc = close(connfd);
+        if (close(connfd) < 0)
+            perror("close() failed");
     }
-    
-//    exit(0);
+
+    close(listenfd);
 }

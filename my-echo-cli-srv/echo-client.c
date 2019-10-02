@@ -9,7 +9,7 @@
 #include <string.h>     // memset(), strlen()
 #include <unistd.h>     // read(), write()
 
-#define MAX_LINE 1024
+#define MAX_LINE 2
 #define SRV_ADDR "127.0.0.1"
 
 void exit_on_error(int rc, const char* str)
@@ -21,6 +21,21 @@ void exit_on_error(int rc, const char* str)
     }
 }
 
+void print_hex(char* str, int max)
+{
+    for (int i = 0; i < max; i++)
+    {
+        if (str[i] == '\0')
+        {
+            printf("\\0");
+            break;
+        }
+        else
+        {
+            printf("0x%x ", str[i]);
+        }
+    }
+}
 
 int main(int argc, char* argv[])
 {
@@ -91,6 +106,10 @@ int main(int argc, char* argv[])
             continue;
 
         rc = write(connfd, snd_buf, strlen(snd_buf)+1);
+        printf("Sent:  %s\n", snd_buf);
+        printf("Bytes: ");
+        print_hex(snd_buf, sizeof(snd_buf));
+        printf("\n");
         // strlen+1 bytes of data including '\0' !!!
         if (rc < 0)
         {
@@ -105,7 +124,10 @@ int main(int argc, char* argv[])
             break; // don't exit yet
         }
         
-        printf("Got: %s", rcv_buf);
+        printf("Got:   %s\n", rcv_buf);
+        printf("Bytes: ");
+        print_hex(rcv_buf, sizeof(rcv_buf));
+        printf("\n");
     
     }
     
