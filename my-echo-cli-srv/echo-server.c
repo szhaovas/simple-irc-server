@@ -63,7 +63,7 @@ int main(int argc, char* argv[])
     exit_on_error(rc, "bind() failed");
     
     // listen
-    rc = listen(listenfd, 1);
+    rc = listen(listenfd, MAX_PENDING_CONNS);
     exit_on_error(rc, "listen() failed");
     printf("Echo server started\n");
     

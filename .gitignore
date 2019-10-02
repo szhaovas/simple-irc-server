@@ -1,6 +1,6 @@
 # Project-specific files
-*/echo-server
-*/echo-client
+*/*-server
+*/*-client
 
 
 # Prerequisites
