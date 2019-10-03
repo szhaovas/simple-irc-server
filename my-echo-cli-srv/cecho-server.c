@@ -12,7 +12,7 @@
 #include <errno.h>      // errno
 
 #define MAX_PENDING_CONNS 10
-#define MAX_LINE 1024
+#define MAX_LINE 512
 
 
 void exit_on_error(long __rc, const char* str)
@@ -113,6 +113,7 @@ void handle_new_connection(int listenfd, int conn[], int* num_conn, int max_conn
             break;
         }
     }
+    fprintf(stderr, "New client from %s at port %s, fd=%i\n", hbuf, sbuf, connfd);
 }
 
 int handle_data(int connfd, char rcv_buf[], int rcv_buf_len)
@@ -125,13 +126,21 @@ int handle_data(int connfd, char rcv_buf[], int rcv_buf_len)
     
     if (bytes_read < 0)
     {
-        perror("read() failed");
-        return -1;
+        if (errno == EAGAIN)
+        {
+            fprintf(stderr, "Nothing to read\n");
+            return 0; // nothing to read
+        }
+        else
+        {
+            perror("read() failed");
+            return -1;
+        }
     }
-    if (bytes_read == 0)
+    else if (bytes_read == 0)
     {
-        // Nothing to read (hash collision?)
-        return 0;
+        fprintf(stderr, "EOF\n");
+        return -1; // EOF
     }
     
     fprintf(stderr, "<< Got:   %s\n", rcv_buf);
@@ -205,7 +214,7 @@ int main(int argc, char* argv[])
     // listen
     __rc = listen(listenfd, MAX_PENDING_CONNS);
     exit_on_error(__rc, "listen() failed");
-    fprintf(stderr, "Echo server started with fd=%i\n", listenfd);
+    fprintf(stderr, "Echo server started\n");
     
     // Set up fd pool
     fd_set fds;
@@ -231,7 +240,7 @@ int main(int argc, char* argv[])
                            &fds,
                            (fd_set *) 0,
                            (fd_set *) 0,
-                           NULL);
+                           &timeout);
         exit_on_error(ready, "select() failed");
         
         if (ready == 0)
@@ -247,19 +256,21 @@ int main(int argc, char* argv[])
                 handle_new_connection(listenfd, conn, &num_conn, max_conn);
             }
             // check activities from connected sockets
-            for (int i = 0; i < highfd; i++)
+            for (int i = 0; i < num_conn; i++)
             {
-                if (FD_ISSET(conn[i], &fds)){
-                    __rc = handle_data(conn[i], rcv_buf, rcv_buf_len);
-                    // read() or write() failed (assuming it was due to "connection reset by peer")
-                    // Close this connection and remove associated state information
-                    if (__rc < 0)
-                    {
-                        close(conn[i]);
-                        conn[i] = 0;
-                        num_conn -= 1;
-                    }
+                 if (FD_ISSET(conn[i], &fds)){
+                fprintf(stderr, "Active fd=%i\n", conn[i]);
+                __rc = handle_data(conn[i], rcv_buf, rcv_buf_len);
+                // read() or write() failed (assuming it was due to "connection reset by peer")
+                // Close this connection and remove associated state information
+                if (__rc < 0)
+                {
+                    fprintf(stderr, "Client fd=%i closed the connection.\n", conn[i]);
+                    close(conn[i]);
+                    conn[i] = 0;
+                    num_conn -= 1;
                 }
+                 }
             }
         }
     }
