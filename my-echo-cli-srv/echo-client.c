@@ -9,8 +9,7 @@
 #include <string.h>     // memset(), strlen()
 #include <unistd.h>     // read(), write()
 
-#define MAX_LINE 2
-#define SRV_ADDR "127.0.0.1"
+#define MAX_LINE 1024
 
 void exit_on_error(int rc, const char* str)
 {
@@ -39,7 +38,7 @@ void print_hex(char* str, int max)
 
 int main(int argc, char* argv[])
 {
-    if (argc != 2)
+    if (argc < 2 || argc > 3)
     {
         // Don't fix the progam name. Use argv[0] instead.
         // Also, print to stderr, not stdout
@@ -48,6 +47,7 @@ int main(int argc, char* argv[])
         fprintf(stderr, "Usage:  %s <srvPort>\n", argv[0]);
         exit(1);
     }
+
     int rc;
 
     // Never trust user input. Always verify it!
@@ -58,8 +58,19 @@ int main(int argc, char* argv[])
     //   - The port is in an invalid range (not too high, not too low)
     // MYCODE:
     // unsigned short port = strtoul(argv[1], NULL, 10);
-    char* srv_port_str = argv[1];
-    char* srv_port_str_end;
+    
+    char* srv_port_str, *srv_addr, *srv_port_str_end;
+    if (argc == 2)
+    {
+        srv_addr = "127.0.0.1";
+        srv_port_str = argv[1];
+    }
+    else
+    {
+        srv_addr = argv[1];
+        srv_port_str = argv[2];
+    }
+
     unsigned long srv_port_long = strtoul(srv_port_str, &srv_port_str_end, 0);
     // Two things:
     //   - The 2nd arg is char**, since it needs to modify a char* var
@@ -70,15 +81,13 @@ int main(int argc, char* argv[])
         || srv_port_long < 1024               // priviledged ports
         || srv_port_long >= 65536)            // too high
     {
-        fprintf(stderr,
-            "Invalid port %s, please provide integer in 1024-65535 range\n",
-             srv_port_str);
+        fprintf(stderr, "Invalid port %s, please provide integer in 1024-65535 range\n", srv_port_str);
         exit(1);
     }
 
     // Use getaddrinfo to query DNS to get address
     struct addrinfo* srv_addr_info;
-    rc = getaddrinfo(SRV_ADDR, srv_port_str, NULL, &srv_addr_info);
+    rc = getaddrinfo(srv_addr, srv_port_str, NULL, &srv_addr_info);
     exit_on_error(rc, "getaddrinfo() failed");
     // MYCODE:
     // inet_pton(AF_INET, SRV_ADDR, &saddr.sin_addr.s_addr);
