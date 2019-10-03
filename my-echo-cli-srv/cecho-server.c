@@ -8,6 +8,8 @@
 #include <unistd.h>     // close()
 #include <fcntl.h>      // fcntl
 #include <sys/select.h> // select(), fd_set, etc.
+#include <netdb.h>      // getnameinfo
+#include <errno.h>      // errno
 
 #define MAX_PENDING_CONNS 10
 #define MAX_LINE 1024
@@ -80,6 +82,7 @@ void handle_new_connection(int listenfd, int conn[], int* num_conn, int max_conn
     if (connfd < 0)
     {
         perror("accept() failed");
+        return;
     }
     if (*num_conn == max_conn)
     {
@@ -90,9 +93,16 @@ void handle_new_connection(int listenfd, int conn[], int* num_conn, int max_conn
     // Make fd non-blocking
     set_non_blocking(connfd);
     // Annouce the new client
-    char client_addr_str[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &cli_addr.sin_addr.s_addr, (char *) client_addr_str, INET_ADDRSTRLEN);
-    fprintf(stderr, "New client from %s at port %u\n", client_addr_str, ntohs(cli_addr.sin_port));
+    char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
+    if (getnameinfo((struct sockaddr *) &cli_addr, sizeof(cli_addr),
+                    hbuf, sizeof(hbuf),
+                    sbuf, sizeof(sbuf),
+                    0))
+    {
+        perror("Could not get client's hostname");
+        close(connfd);
+        return;
+    }
     // Look for an empty slot to record this fd
     for (int i = 0; i < max_conn; i++)
     {
@@ -140,8 +150,6 @@ int handle_data(int connfd, char rcv_buf[], int rcv_buf_len)
     print_hex(rcv_buf, rcv_buf_len);
     fprintf(stderr, "\n");
     return 0;
-    // __rc = close(connfd);
-    // exit_on_error(__rc, "close(connection) failed");
 }
 
 int main(int argc, char* argv[])
