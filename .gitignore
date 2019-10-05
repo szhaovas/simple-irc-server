@@ -1,3 +1,17 @@
+# macOS - General
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# macOS - Icon must end with two \r
+Icon
+
+# macOS - Thumbnails
+._*
+
+# VS Code
+*/.vscode
+
 # Project-specific files
 */*-server
 */*-client
