@@ -14,17 +14,17 @@
 #define MAX_CHANNAME 64
 
 typedef struct{
-  int sock;
-  struct sockaddr_in cliaddr;
-  unsigned inbuf_size;
-  int registered;
-  char hostname[MAX_HOSTNAME];
-  char servername[MAX_SERVERNAME];
-  char user[MAX_USERNAME];
-  char nick[MAX_USERNAME];
-  char realname[MAX_REALNAME];
-  char inbuf[MAX_MSG_LEN+1];
-  char channel[MAX_CHANNAME];
+    int sock;
+    struct sockaddr_in cliaddr;
+    unsigned inbuf_size;
+    int registered;
+    char hostname[MAX_HOSTNAME];
+    char servername[MAX_SERVERNAME];
+    char user[MAX_USERNAME];
+    char nick[MAX_USERNAME];
+    char realname[MAX_REALNAME];
+    char inbuf[MAX_MSG_LEN+1];
+    char channel[MAX_CHANNAME];
 } client;
 
 

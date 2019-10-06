@@ -347,6 +347,7 @@ int handle_data(client* cli, char snd_buf[])
             *cr = '\0';
         else
             *lf = '\0';
+        DPRINTF(DEBUG_INPUT, "%s", msg);
         print_hex(DEBUG_INPUT, msg, MAX_MSG_LEN); // replace this with handleLine(msg, cli);
         msg = MIN(cr, lf) + 1;
     }
