@@ -63,7 +63,7 @@ int main(int argc, char *argv[] ){
     
     uint16_t port = (uint16_t) portLong;
     
-    /* Start your engines here! */
+    /* Initialize server */
     
     int __rc; // for return codes
     struct sockaddr_in srv_addr;
@@ -88,7 +88,7 @@ int main(int argc, char *argv[] ){
     srv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     srv_addr.sin_port = htons(port);
     
-    // Bind listening socket to specified port
+    // Bind listening socket to the specified port
     __rc = bind(listenfd, (struct sockaddr *) &srv_addr, sizeof(struct sockaddr));
     exit_on_error(__rc, "bind() failed");
     
@@ -114,14 +114,11 @@ int main(int argc, char *argv[] ){
             port,
             listenfd);
     
+    // Start main server loop
     while (1)
     {
         int highfd = build_fd_set(&fds, listenfd, clients, MAX_CLIENTS);
-        int ready = select(highfd + 1,
-                           &fds,
-                           (fd_set *) 0,
-                           (fd_set *) 0,
-                           &timeout);
+        int ready = select(highfd + 1, &fds, (fd_set *) 0, (fd_set *) 0, &timeout);
         exit_on_error(ready, "select() failed");
         
         if (ready == 0)
@@ -163,8 +160,9 @@ int main(int argc, char *argv[] ){
 }
 
 
+
 /* Build fd_set in |fds| given the listening socket |listenfd| and
- * file descriptors in the |conn| array with size |max_clients|
+ * client sockets |clients| array.
  */
 int build_fd_set(fd_set* fds, int listenfd, client* clients[], int max_clients)
 {
@@ -188,6 +186,8 @@ int build_fd_set(fd_set* fds, int listenfd, client* clients[], int max_clients)
     return highfd;
 }
 
+
+
 /* Set file descriptor |fd| to be non-blocking.
  */
 int set_non_blocking(int fd)
@@ -209,16 +209,22 @@ int set_non_blocking(int fd)
     return 0;
 }
 
+
+
 /* Handle new incoming client connection on |listenfd| as reported by select()
  * If the connection can and has been accepted, then
- *   - update |conn| array to include this connection file descriptor,
+ *   - update |clients| array to record this client's info,
  *   - increment the number of existing connections |num_clients| by 1.
  *
- * The connection will be closed immediately after be accepted if
+ * The connection will be closed immediately after being accepted if
  *   - the number of existing connections has reached |max_clients|, or
- *   - we cannot retrieve client's hostname using getnameinfo().
+ *   - cannot set connection socket to be non-blocking
+ *   - cannot retrieve client's hostname using getnameinfo().
  */
-int handle_new_connection(int listenfd, client* clients[], int* num_clients, int max_clients)
+int handle_new_connection(int listenfd,
+                          client* clients[],
+                          int* num_clients,
+                          int max_clients)
 {
     // Accept any new connection
     struct sockaddr_in cli_addr;
@@ -237,13 +243,13 @@ int handle_new_connection(int listenfd, client* clients[], int* num_clients, int
         return -1;
     }
     
-    // Ready to officially accept this client
+    // Ready to record client information
     client* cli = (client *) malloc(sizeof(client));
     memset(cli, 0, sizeof(*cli));
     
     
-    // Initialize |sock| field
-    if (set_non_blocking(sock) < 0) // make fd non-blocking
+    // Initialize connection socket
+    if (set_non_blocking(sock) < 0)
     {
         close(sock);
         return -1;
@@ -262,19 +268,20 @@ int handle_new_connection(int listenfd, client* clients[], int* num_clients, int
         return -1;
     }
     
-    // Initialize |hostname|
-    memcpy(&(cli->hostname), &host_buf, MIN(strlen(host_buf)+1, MAX_HOSTNAME)); // truncate hostname if too long
+    // Initialize hostname, truncate if necessary
+    memcpy(&(cli->hostname),
+           &host_buf,
+           MIN(strlen(host_buf)+1, MAX_HOSTNAME));
     
-    // Initialize |cliaddr| field via copying
+    // Initialize various fields
     memcpy(&(cli->cliaddr), &cli_addr, sizeof(cli_addr));
-    
-    // Initialize buffer info
     cli->inbuf_size = 0;
     
-    DPRINTF(DEBUG_CLIENTS, "New client from %s, fd=%i\n", cli->hostname, sock);
+    DPRINTF(DEBUG_CLIENTS, "New client from %s, fd=%i\n",
+            cli->hostname,
+            cli->sock);
     
-    
-    // Look for an empty slot to record this client
+    // Look for an empty slot to hold this client's record
     for (int i = 0; i < max_clients; i++)
     {
         if (clients[i] == NULL)
@@ -287,8 +294,10 @@ int handle_new_connection(int listenfd, client* clients[], int* num_clients, int
     return 0;
 }
 
-/* Handle new input data from file descriptor |connfd|, as reported by select()
- * Data will buffered in |rcv_buf| with size |rcv_buf_len|.
+
+
+
+/* Handle new input data from client.
  */
 int handle_data(client* cli)
 {
@@ -331,6 +340,7 @@ int handle_data(client* cli)
     DPRINTF(DEBUG_INPUT, "\n");
     return 0;
 }
+
 
 
 /* Print error message |str| and exit if return code |__rc| < 0
