@@ -33,5 +33,5 @@ extern unsigned int debug;
 #define DEBUG_ALL  0xffffffff
 
 int set_debug(char *arg);  /* Returns 0 on success, -1 on failure */
-
+void print_hex(int level, char* str, int max);
 #endif /* _DEBUG_H_ */

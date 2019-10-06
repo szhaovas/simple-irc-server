@@ -52,3 +52,26 @@ int set_debug(char *arg){
   
   return 0;
 }
+
+/* Print the hex code of the input |str| including '\0',
+ * up to |max| characters (to prevent overflow).
+ */
+void print_hex(int level, char* str, int max)
+{
+    extern unsigned int debug;
+    if (debug & (level))
+    {
+    for (int i = 0; i < max; i++)
+    {
+        if (str[i] == '\0')
+        {
+            eprintf("\\0");
+            break;
+        }
+        else
+        {
+            eprintf("0x%x ", str[i]);
+        }
+    }
+    }
+}
