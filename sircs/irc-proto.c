@@ -72,6 +72,8 @@ struct dispatch cmds[] = {
  * Strip the trailing newline off before calling this function.
  */
 void handleLine(char *line, client *cli){
+    // Empty messages are silently iginored (RFC)
+    if (*line == '\0') return;
     
     char *prefix = NULL, *command, *pstart, *params[MAX_MSG_TOKENS];
     int nparams = 0;
