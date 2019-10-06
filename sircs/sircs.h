@@ -27,4 +27,15 @@ typedef struct{
   char channel[MAX_CHANNAME];
 } client;
 
+
+int build_fd_set(fd_set* fds, int listenfd, client* clients[], int max_clients);
+
+int set_non_blocking(int fd);
+
+int handle_new_connection(int listenfd, client* clients[], int* num_clients, int max_clients);
+
+int handle_data(client* client);
+
+void exit_on_error(long __rc, const char* str);
+
 #endif /* _SIRCS_H_ */
