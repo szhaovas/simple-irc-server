@@ -34,7 +34,7 @@ int set_non_blocking(int fd);
 
 int handle_new_connection(int listenfd, client* clients[], int* num_clients, int max_clients);
 
-int handle_data(client* client);
+int handle_data(client* cli, char snd_buf[]);
 
 void exit_on_error(long __rc, const char* str);
 

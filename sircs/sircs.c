@@ -110,6 +110,9 @@ int main(int argc, char *argv[] ){
     timeout.tv_sec = 1;
     timeout.tv_usec = 0;
     
+    // Allocate send buffer
+    char snd_buf[MAX_MSG_LEN+1]; // same length as each inbuf
+    
     DPRINTF(DEBUG_INIT, "Simple IRC server listening on port %d, fd %d\n",
             port,
             listenfd);
@@ -140,7 +143,7 @@ int main(int argc, char *argv[] ){
                 if (FD_ISSET(sock, &fds))
                 {
                     DPRINTF(DEBUG_CLIENTS, "Active fd=%i\n", sock);
-                    __rc = handle_data(clients[i]);
+                    __rc = handle_data(clients[i], snd_buf);
                     // If something went wrong,
                     // close this connection and remove associated state info
                     if (__rc < 0)
@@ -297,13 +300,18 @@ int handle_new_connection(int listenfd,
 
 
 
-/* Handle new input data from client.
+/* Handle new input data from the client.
  */
-int handle_data(client* cli)
+int handle_data(client* cli, char snd_buf[])
 {
-    // May not read all bytes if user sent more than buffer size?
+    // Make sure there's still space to read anything
+    // FIXME: if not, the msg in the buffer is too long, so discard
+    assert(cli->inbuf_size < MAX_MSG_LEN);
+    // Compute remaning space
+    int buf_remaining = MAX_MSG_LEN - cli->inbuf_size;
+    // Compute buffer offset
     char* buf = cli->inbuf + cli->inbuf_size;
-    long bytes_read = read(cli->sock, buf, MAX_MSG_LEN);
+    int bytes_read = (int) read(cli->sock, buf, buf_remaining);
     if (bytes_read < 0)
     {
         // Nothing to read due to non-blocking fd
@@ -312,7 +320,7 @@ int handle_data(client* cli)
         // Something went wrong (connection reset by client, etc.)
         else
         {
-            perror("read() failed");
+            DEBUG_PERROR("read() failed");
             return -1;
         }
     }
@@ -320,24 +328,48 @@ int handle_data(client* cli)
     else if (bytes_read == 0)
     {
         DPRINTF(DEBUG_INPUT, "EOF\n");
-        return -1; // EOF
+        return -1;
     }
     // Print received contents
     DPRINTF(DEBUG_INPUT, "<< Got:   %s\n", buf);
     DPRINTF(DEBUG_INPUT, "<< Bytes: ");
-    print_hex(DEBUG_INPUT, buf, MAX_MSG_LEN);
+    print_hex(DEBUG_INPUT, buf, MAX_MSG_LEN+1);
     DPRINTF(DEBUG_INPUT, "\n");
-    // Echo everything back to client
-    if (write(cli->sock, buf, strlen(buf)+1) < 0)
-    {
-        perror("write() failed");
-        return -1;
+    
+    char *msg = cli->inbuf; // start of a (potential) msg
+    char *cr, *lf;
+    while (msg < cli->inbuf + MAX_MSG_LEN) {
+        cr = strchr(msg, '\r');
+        lf = strchr(msg, '\n');
+        if (!cr && !lf)
+            break;
+        if (cr < lf)
+            *cr = '\0';
+        else
+            *lf = '\0';
+        print_hex(DEBUG_INPUT, msg, MAX_MSG_LEN); // replace this with handleLine(msg, cli);
+        msg = MIN(cr, lf) + 1;
     }
-    // Print written contents (shouldn't change)
-    DPRINTF(DEBUG_INPUT, ">> Sent:  %s\n", buf);
-    DPRINTF(DEBUG_INPUT, ">> Bytes: ");
-    print_hex(DEBUG_INPUT, buf, MAX_MSG_LEN);
-    DPRINTF(DEBUG_INPUT, "\n");
+    // Nothing else to read
+    if ( *msg == '\0' )
+    {
+        memset(&(cli->inbuf), '\0', MAX_MSG_LEN);
+        cli->inbuf_size = 0; // FIXME: this variable is not being used
+    }
+    // Initial segment of an incomplete msg (assuming the rest will be delivered next time)
+    // Move this segment to the beginning of the buffer
+    else
+    {
+        strcpy(snd_buf, msg); // use send buffer as intermediate storage
+        memset(&(cli->inbuf), '\0', MAX_MSG_LEN);
+        strcpy(cli->inbuf, snd_buf);
+        memset(snd_buf, '\0', MAX_MSG_LEN);
+    }
+
+    // FIXME: what if msg is 1.5 times the size of the buffer (N)?
+    // The first N bytes will be thrown away, but the next 0.5 times will fit
+    // and be interpreted. Then we should throw a unknown cmd error.
+    
     return 0;
 }
 
