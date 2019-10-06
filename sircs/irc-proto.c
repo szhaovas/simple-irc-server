@@ -18,7 +18,7 @@
  * e.g., void cmd_nick(your_client_thingy *c, char *prefix, ...)
  * or however you set it up.
  */
-#define CMD_ARGS char *prefix, char **params, int nparams
+#define CMD_ARGS client *cli, char *prefix, char **params, int nparams
 typedef void (*cmd_handler_t)(CMD_ARGS);
 #define COMMAND(cmd_name) void cmd_name(CMD_ARGS)
 
@@ -36,7 +36,11 @@ struct dispatch {
 COMMAND(cmdNick);
 COMMAND(cmdUser);
 COMMAND(cmdQuit);
-/* Fill in the blanks */
+COMMAND(cmdJoin);
+COMMAND(cmdPart);
+COMMAND(cmdList);
+COMMAND(cmdPmsg);
+COMMAND(cmdWho);
 
 /**
  * Dispatch table.  "reg" means "user must be registered in order
@@ -44,10 +48,14 @@ COMMAND(cmdQuit);
  * the command requires.  It may take more optional parameters.
  */
 struct dispatch cmds[] = {/* cmd,    reg  #parm  function */
-                          { "NICK",    0, 0, cmdNick },
+                          { "NICK",    0, 1, cmdNick }, // Basic
                           { "USER",    0, 4, cmdUser },
                           { "QUIT",    1, 0, cmdQuit },
-                          /* Fill in the blanks... */
+                          { "JOIN",    1, 1, cmdJoin }, // Channel
+                          { "PART",    1, 1, cmdPart },
+                          { "LIST",    1, 0, cmdList },
+                          { "PRIVMSG", 1, 1, cmdPmsg }, // Advanced
+                          { "WHO",     1, 0, cmdWho }
                          };
 
 /**
@@ -62,7 +70,7 @@ struct dispatch cmds[] = {/* cmd,    reg  #parm  function */
  * it the result of calling read()).  
  * Strip the trailing newline off before calling this function.
  */
-void handleLine(char *line, int clientNum){
+void handleLine(char *line, client *cli){
   
   char *prefix = NULL, *command, *pstart, *params[MAX_MSG_TOKENS];
   int nparams = 0;
@@ -143,8 +151,7 @@ void handleLine(char *line, int clientNum){
 
   for (i = 0; i < NELMS(cmds); i++){
     if (!strcasecmp(cmds[i].cmd, command)){
-      if (cmds[i].needreg /* &&  YOUR TEST HERE TO
-                             SEE IF CLIENT IS REGISTERED */){
+      if (cmds[i].needreg && !cli->registered){
         // youshouldputcodehere();
         /* ERROR - the client is not registered and they need
 		     * to be in order to use this command! */
@@ -156,7 +163,7 @@ void handleLine(char *line, int clientNum){
 		    /* Here's the call to the cmd_foo handler... modify
 		     * to send it the right params per your program
 		     * structure. */
-        (*cmds[i].handler)(prefix, params, nparams);
+        (*cmds[i].handler)(cli, prefix, params, nparams);
       }
         break;
     }
@@ -171,16 +178,34 @@ void handleLine(char *line, int clientNum){
 
 /* Command handlers */
 /* MODIFY to take the arguments you specified above! */
-void cmdNick(char *prefix, char **params, int nparams){
+void cmdNick(client *cli, char *prefix, char **params, int nparams){
   /* do something */
 }
 
-void cmdUser(char *prefix, char **params, int nparams){
+void cmdUser(client *cli, char *prefix, char **params, int nparams){
   /* do something */
 }
 
-void cmdQuit(char *prefix, char **params, int nparams){
+void cmdQuit(client *cli, char *prefix, char **params, int nparams){
   /* do something */
 }
 
-/* add stuff here */
+void cmdJoin(client *cli, char *prefix, char **params, int nparams){
+    /* do something */
+}
+
+void cmdPart(client *cli, char *prefix, char **params, int nparams){
+    /* do something */
+}
+
+void cmdList(client *cli, char *prefix, char **params, int nparams){
+    /* do something */
+}
+
+void cmdPmsg(client *cli, char *prefix, char **params, int nparams){
+    /* do something */
+}
+
+void cmdWho(client *cli, char *prefix, char **params, int nparams){
+    /* do something */
+}

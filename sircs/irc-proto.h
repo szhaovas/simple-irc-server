@@ -1,6 +1,8 @@
 #ifndef _IRC_PROTO_H_
 #define _IRC_PROTO_H_
 
+#include "sircs.h"
+
 typedef enum {
   ERR_INVALID = 1,
   ERR_NOSUCHNICK = 401,
@@ -34,6 +36,6 @@ typedef enum {
 } rpl_t;
 
 
-void handleLine(char *line, int clientNum);
+void handleLine(char *line, client* cli);
 
 #endif /* _IRC_PROTO_H_ */
