@@ -27,6 +27,7 @@ void usage() {
 
 
 int main(int argc, char *argv[] ){
+    DPRINTF(DEBUG_INIT, "Hello\n");
     extern char *optarg;
     extern int optind;
     int ch;
@@ -49,7 +50,7 @@ int main(int argc, char *argv[] ){
         usage();
     }
     
-    char* endArg0Ptr;
+    char *endArg0Ptr;
     unsigned long portLong = strtoul(argv[0], &endArg0Ptr, 0);
     
     // port check: no conversion at all, extra junk at the end, out of range
@@ -101,7 +102,7 @@ int main(int argc, char *argv[] ){
     fd_set fds;
     
     // Array to keep track of connections that are alive
-    client* clients[MAX_CLIENTS];
+    client *clients[MAX_CLIENTS];
     int num_clients = 0;
     memset(&clients, 0, sizeof(clients));
     
@@ -167,7 +168,7 @@ int main(int argc, char *argv[] ){
 /* Build fd_set in |fds| given the listening socket |listenfd| and
  * client sockets |clients| array.
  */
-int build_fd_set(fd_set* fds, int listenfd, client* clients[], int max_clients)
+int build_fd_set(fd_set *fds, int listenfd, client *clients[], int max_clients)
 {
     int highfd = listenfd;
     FD_ZERO(fds);
@@ -175,7 +176,7 @@ int build_fd_set(fd_set* fds, int listenfd, client* clients[], int max_clients)
     // update highfd
     for (int i = 0; i < max_clients; i++)
     {
-        client* cli = clients[i];
+        client *cli = clients[i];
         if (cli != NULL)
         {
             int fd = cli->sock;
@@ -225,8 +226,8 @@ int set_non_blocking(int fd)
  *   - cannot retrieve client's hostname using getnameinfo().
  */
 int handle_new_connection(int listenfd,
-                          client* clients[],
-                          int* num_clients,
+                          client *clients[],
+                          int *num_clients,
                           int max_clients)
 {
     // Accept any new connection
@@ -247,7 +248,7 @@ int handle_new_connection(int listenfd,
     }
     
     // Ready to record client information
-    client* cli = (client *) malloc(sizeof(client));
+    client *cli = (client *) malloc(sizeof(client));
     memset(cli, 0, sizeof(*cli));
     
     
@@ -302,7 +303,7 @@ int handle_new_connection(int listenfd,
 
 /* Handle new input data from the client.
  */
-int handle_data(client* cli, char snd_buf[])
+int handle_data(client *cli, char snd_buf[])
 {
     // Make sure there's still space to read anything
     // FIXME: if not, the msg in the buffer is too long, so discard
@@ -310,21 +311,21 @@ int handle_data(client* cli, char snd_buf[])
     // Compute remaning space
     int buf_remaining = MAX_MSG_LEN - cli->inbuf_size;
     // Compute buffer offset
-    char* buf = cli->inbuf + cli->inbuf_size;
+    char *buf = cli->inbuf + cli->inbuf_size;
     int bytes_read = (int) read(cli->sock, buf, buf_remaining);
     if (bytes_read < 0)
     {
         // Nothing to read due to non-blocking fd
         if (errno == EAGAIN)
             return 0;
-        // Something went wrong (connection reset by client, etc.)
+        // Something else went wrong (connection reset by client, etc.)
         else
         {
             DEBUG_PERROR("read() failed");
             return -1;
         }
     }
-    // Connection closed by client
+    // Connection closed by client (EOF)
     else if (bytes_read == 0)
     {
         DPRINTF(DEBUG_INPUT, "EOF\n");
@@ -337,25 +338,35 @@ int handle_data(client* cli, char snd_buf[])
     DPRINTF(DEBUG_INPUT, "\n");
     
     char *msg = cli->inbuf; // start of a (potential) msg
-    char *cr, *lf;
+    char *cr, *lf, *end;
     while (msg < cli->inbuf + MAX_MSG_LEN) {
         cr = strchr(msg, '\r');
         lf = strchr(msg, '\n');
         if (!cr && !lf)
             break;
-        if (cr < lf)
-            *cr = '\0';
+        if (!cr)
+            end = lf;
+        else if (!lf)
+            end = cr;
         else
-            *lf = '\0';
-        DPRINTF(DEBUG_INPUT, "%s", msg);
-        print_hex(DEBUG_INPUT, msg, MAX_MSG_LEN); // replace this with handleLine(msg, cli);
-        msg = MIN(cr, lf) + 1;
+            end = MIN(cr, lf);
+        *end = '\0';
+        
+        /* Replace the following with handleLine(msg, cli); */
+        // Replace start
+        DPRINTF(DEBUG_INPUT, "Msg: %s\n", msg);
+        print_hex(DEBUG_INPUT, msg, MAX_MSG_LEN);
+        DPRINTF(DEBUG_INPUT, "\n");
+        // Replace end
+        
+        msg = end + 1;
     }
     // Nothing else to read
-    if ( *msg == '\0' )
+    // FIXME: should we throw away a segment if it is already too long (>=512 bytes?)
+    if ( *msg == '\0')
     {
         memset(&(cli->inbuf), '\0', MAX_MSG_LEN);
-        cli->inbuf_size = 0; // FIXME: this variable is not being used
+        cli->inbuf_size = 0; // FIXME: this variable is not being used?
     }
     // Initial segment of an incomplete msg (assuming the rest will be delivered next time)
     // Move this segment to the beginning of the buffer
@@ -365,11 +376,16 @@ int handle_data(client* cli, char snd_buf[])
         memset(&(cli->inbuf), '\0', MAX_MSG_LEN);
         strcpy(cli->inbuf, snd_buf);
         memset(snd_buf, '\0', MAX_MSG_LEN);
+        cli->inbuf_size = (unsigned) strlen(cli->inbuf);
+        
+        DPRINTF(DEBUG_INPUT, "Incomplete msg: %s\n", cli->inbuf);
+        print_hex(DEBUG_INPUT, cli->inbuf, MAX_MSG_LEN);
+        DPRINTF(DEBUG_INPUT, "\n");
     }
 
     // FIXME: what if msg is 1.5 times the size of the buffer (N)?
     // The first N bytes will be thrown away, but the next 0.5 times will fit
-    // and be interpreted. Then we should throw a unknown cmd error.
+    // and be interpreted. Then we should throw an unknown cmd error.
     
     return 0;
 }
@@ -378,7 +394,7 @@ int handle_data(client* cli, char snd_buf[])
 
 /* Print error message |str| and exit if return code |__rc| < 0
  */
-void exit_on_error(long __rc, const char* str)
+void exit_on_error(long __rc, const char *str)
 {
     if (__rc < 0)
     {

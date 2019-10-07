@@ -7,6 +7,7 @@
 #define MAX_CLIENTS 512
 #define MAX_MSG_TOKENS 10
 #define MAX_MSG_LEN 1024
+#define MAX_MSG_LEN_RPC 512
 #define MAX_USERNAME 32
 #define MAX_HOSTNAME 64
 #define MAX_SERVERNAME 64
