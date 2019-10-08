@@ -34,4 +34,12 @@ extern unsigned int debug;
 
 int set_debug(char *arg);  /* Returns 0 on success, -1 on failure */
 void print_hex(int level, char* str, int max);
+
+// Fake boolean values
+#define TRUE 1
+#define FALSE 0
+// MIN and MAX
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+
 #endif /* _DEBUG_H_ */

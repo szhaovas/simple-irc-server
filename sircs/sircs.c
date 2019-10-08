@@ -17,14 +17,14 @@
 #include "irc-proto.h"
 
 #define NELMS(array) (sizeof(array) / sizeof(array[0]))
-#define MIN(a,b) (((a)<(b))?(a):(b))
-#define MAX(a,b) (((a)>(b))?(a):(b))
 
 void usage() {
     eprintf("sircs [-h] [-D debugLevel] <port>\n");
     exit(-1);
 }
 
+char srv_hostname[MAX_HOSTNAME];
+char snd_buf[RFC_MAX_MSG_LEN]; // server messages must conform to RFC
 
 int main(int argc, char *argv[] ){
     DPRINTF(DEBUG_INIT, "Hello\n");
@@ -112,16 +112,23 @@ int main(int argc, char *argv[] ){
     timeout.tv_usec = 0;
     
     // Allocate send buffer
-    char snd_buf[MAX_MSG_LEN+1]; // same length as each inbuf
+//    snd_buf = malloc(RFC_MAX_MSG_LEN); // server messages must conform to RFC
+    memset(snd_buf, '\0', RFC_MAX_MSG_LEN);
+    snd_buf[0] = 'h';
     
-    DPRINTF(DEBUG_INIT, "Simple IRC server listening on port %d, fd %d\n",
+    // Get server hostname
+    srv_hostname[MAX_HOSTNAME-1] = '\0';
+    gethostname(srv_hostname, sizeof(srv_hostname));
+    
+    DPRINTF(DEBUG_INIT, "Simple IRC server listening on %s:%d, fd=%d\n",
+            srv_hostname,
             port,
             listenfd);
     
     // Start main server loop
-    while (1)
+    while (TRUE)
     {
-        int highfd = build_fd_set(&fds, listenfd, clients, MAX_CLIENTS);
+        int highfd = build_fd_set(&fds, listenfd, clients);
         int ready = select(highfd + 1, &fds, (fd_set *) 0, (fd_set *) 0, &timeout);
         exit_on_error(ready, "select() failed");
         
@@ -135,24 +142,27 @@ int main(int argc, char *argv[] ){
             // Accept a new connection
             if (FD_ISSET(listenfd, &fds))
             {
-                handle_new_connection(listenfd, clients, &num_clients, MAX_CLIENTS);
+                handle_new_connection(listenfd, clients, &num_clients);
             }
             // Check activities from connected sockets
-            for (int i = 0; i < num_clients; i++)
+            for (int i = 0; i < MAX_CLIENTS; i++)
             {
-                int sock = clients[i]->sock;
-                if (FD_ISSET(sock, &fds))
+                if (clients[i] != NULL)
                 {
-                    DPRINTF(DEBUG_CLIENTS, "Active fd=%i\n", sock);
-                    __rc = handle_data(clients[i], snd_buf);
-                    // If something went wrong,
-                    // close this connection and remove associated state info
-                    if (__rc < 0)
+                    int sock = clients[i]->sock;
+                    if (FD_ISSET(sock, &fds))
                     {
-                        DPRINTF(DEBUG_CLIENTS, "Client fd=%i closed the connection.\n", sock);
-                        free(clients[i]);
-                        clients[i] = NULL;
-                        num_clients -= 1;
+                        DPRINTF(DEBUG_CLIENTS, "Active fd=%i\n", sock);
+                        __rc = handle_data(clients, i, snd_buf);
+                        // If something went wrong,
+                        // close this connection and remove associated state info
+                        if (__rc < 0)
+                        {
+                            DPRINTF(DEBUG_CLIENTS, "Client fd=%i closed the connection.\n", sock);
+                            free(clients[i]);
+                            clients[i] = NULL;
+                            num_clients -= 1;
+                        }
                     }
                 }
             }
@@ -164,17 +174,23 @@ int main(int argc, char *argv[] ){
 }
 
 
+char* get_server_hostname(char* buf)
+{
+    return stpcpy(buf, srv_hostname);
+}
+
+
 
 /* Build fd_set in |fds| given the listening socket |listenfd| and
  * client sockets |clients| array.
  */
-int build_fd_set(fd_set *fds, int listenfd, client *clients[], int max_clients)
+int build_fd_set(fd_set *fds, int listenfd, client *clients[])
 {
     int highfd = listenfd;
     FD_ZERO(fds);
     FD_SET(listenfd, fds);
     // update highfd
-    for (int i = 0; i < max_clients; i++)
+    for (int i = 0; i < MAX_CLIENTS; i++)
     {
         client *cli = clients[i];
         if (cli != NULL)
@@ -221,14 +237,13 @@ int set_non_blocking(int fd)
  *   - increment the number of existing connections |num_clients| by 1.
  *
  * The connection will be closed immediately after being accepted if
- *   - the number of existing connections has reached |max_clients|, or
+ *   - the number of existing connections has reached |MAX_CLIENTS|, or
  *   - cannot set connection socket to be non-blocking
  *   - cannot retrieve client's hostname using getnameinfo().
  */
 int handle_new_connection(int listenfd,
                           client *clients[],
-                          int *num_clients,
-                          int max_clients)
+                          int *num_clients)
 {
     // Accept any new connection
     struct sockaddr_in cli_addr;
@@ -240,7 +255,7 @@ int handle_new_connection(int listenfd,
         perror("accept() failed");
         return -1;
     }
-    if (*num_clients == max_clients)
+    if (*num_clients == MAX_CLIENTS)
     {
         DPRINTF(DEBUG_SOCKETS, "No room for new connections\n");
         close(sock);
@@ -272,10 +287,10 @@ int handle_new_connection(int listenfd,
         return -1;
     }
     
-    // Initialize hostname, truncate if necessary
-    memcpy(&(cli->hostname),
-           &host_buf,
-           MIN(strlen(host_buf)+1, MAX_HOSTNAME));
+    // Initialize hostname (always NUL-terminated), and truncate if necessary
+    // TESTME
+    strncpy(cli->hostname, host_buf, MIN( strlen(host_buf),
+                                          MAX_HOSTNAME-1 ));  // -1 for the last '\0'
     
     // Initialize various fields
     memcpy(&(cli->cliaddr), &cli_addr, sizeof(cli_addr));
@@ -286,7 +301,7 @@ int handle_new_connection(int listenfd,
             cli->sock);
     
     // Look for an empty slot to hold this client's record
-    for (int i = 0; i < max_clients; i++)
+    for (int i = 0; i < MAX_CLIENTS; i++)
     {
         if (clients[i] == NULL)
         {
@@ -303,8 +318,9 @@ int handle_new_connection(int listenfd,
 
 /* Handle new input data from the client.
  */
-int handle_data(client *cli, char snd_buf[])
+int handle_data(client* clients[], int client_no, char* snd_buf)
 {
+    client *cli = clients[client_no];
     // Make sure there's still space to read anything
     // FIXME: if not, the msg in the buffer is too long, so discard
     assert(cli->inbuf_size < MAX_MSG_LEN);
@@ -358,12 +374,14 @@ int handle_data(client *cli, char snd_buf[])
         print_hex(DEBUG_INPUT, msg, MAX_MSG_LEN);
         DPRINTF(DEBUG_INPUT, "\n");
         // Replace end
+        handleLine(msg, clients, client_no);
         
         msg = end + 1;
     }
+    size_t last_msg_len = strlen(msg); //
     // Nothing else to read
-    // FIXME: should we throw away a segment if it is already too long (>=512 bytes?)
-    if ( *msg == '\0')
+    // Also throw away a segment if it is already too long
+    if ( last_msg_len == 0 || last_msg_len >= RFC_MAX_MSG_LEN)
     {
         memset(&(cli->inbuf), '\0', MAX_MSG_LEN);
         cli->inbuf_size = 0; // FIXME: this variable is not being used?

@@ -7,7 +7,6 @@
 #define MAX_CLIENTS 512
 #define MAX_MSG_TOKENS 10
 #define MAX_MSG_LEN 1024
-#define MAX_MSG_LEN_RPC 512
 #define MAX_USERNAME 32
 #define MAX_HOSTNAME 64
 #define MAX_SERVERNAME 64
@@ -31,15 +30,16 @@ typedef struct{
     char channel[MAX_CHANNAME];
 } client;
 
-
-int build_fd_set(fd_set* fds, int listenfd, client* clients[], int max_clients);
+int build_fd_set(fd_set* fds, int listenfd, client* clients[]);
 
 int set_non_blocking(int fd);
 
-int handle_new_connection(int listenfd, client* clients[], int* num_clients, int max_clients);
+int handle_new_connection(int listenfd, client* clients[], int* num_clients);
 
-int handle_data(client* cli, char snd_buf[]);
+int handle_data(client* clients[], int client_no, char* snd_buf);
 
 void exit_on_error(long __rc, const char* str);
+
+char* get_server_hostname(char* buf);
 
 #endif /* _SIRCS_H_ */
