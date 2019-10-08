@@ -12,6 +12,7 @@ Icon
 # VS Code
 */.vscode
 sircs/sircs-xcode/sircs.xcodeproj/project.xcworkspace/xcuserdata/
+sircs/sircs-xcode/sircs.xcodeproj/xcuserdata/
 
 # Project-specific files
 */*-server
