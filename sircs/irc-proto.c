@@ -175,6 +175,7 @@ void handleLine(char *line, client* clients[], int client_no)
                 /* Here's the call to the cmd_foo handler... modify
                  * to send it the right params per your program
                  * structure. */
+                // FIXME: check prefix match here
                 return (*cmds[i].handler)(clients, client_no, prefix, params, nparams);
             }
             break;
@@ -222,7 +223,6 @@ int reply(int n, ...)
     char* ptr = snd_buf;
     
     // Prefix the msg with the originator, i.e. server hostname
-//    extern char *srv_hostname;
     *ptr++ = ':';
     ptr = get_server_hostname(ptr); // Msg originates from server
     *ptr++ = ' ';
@@ -395,9 +395,10 @@ int cmdNick(CMD_ARGS)
 {
     client *cli = clients[client_no];
     char* nick = params[0];
-    char nick_buf[RFC_MAX_NICKNAME];
+    char nick_buf[RFC_MAX_NICKNAME+1];
+    nick_buf[RFC_MAX_NICKNAME] = '\0';
     strncpy(nick_buf, nick, RFC_MAX_NICKNAME);
-    size_t nick_len = strlen(nick_buf); // TESTME: nickname < 9 chars
+    size_t nick_len = strlen(nick_buf);
     int nick_valid = is_nickname_valid(nick, nick_len);
     if (nick_valid)
     {

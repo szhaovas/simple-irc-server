@@ -112,7 +112,6 @@ int main(int argc, char *argv[] ){
     timeout.tv_usec = 0;
     
     // Allocate send buffer
-//    snd_buf = malloc(RFC_MAX_MSG_LEN); // server messages must conform to RFC
     memset(snd_buf, '\0', RFC_MAX_MSG_LEN);
     snd_buf[0] = 'h';
     
@@ -322,7 +321,6 @@ int handle_data(client* clients[], int client_no, char* snd_buf)
 {
     client *cli = clients[client_no];
     // Make sure there's still space to read anything
-    // FIXME: if not, the msg in the buffer is too long, so discard
     assert(cli->inbuf_size < MAX_MSG_LEN);
     // Compute remaning space
     int buf_remaining = MAX_MSG_LEN - cli->inbuf_size;
@@ -384,7 +382,7 @@ int handle_data(client* clients[], int client_no, char* snd_buf)
     if ( last_msg_len == 0 || last_msg_len >= RFC_MAX_MSG_LEN)
     {
         memset(&(cli->inbuf), '\0', MAX_MSG_LEN);
-        cli->inbuf_size = 0; // FIXME: this variable is not being used?
+        cli->inbuf_size = 0;
     }
     // Initial segment of an incomplete msg (assuming the rest will be delivered next time)
     // Move this segment to the beginning of the buffer
@@ -400,11 +398,6 @@ int handle_data(client* clients[], int client_no, char* snd_buf)
         print_hex(DEBUG_INPUT, cli->inbuf, MAX_MSG_LEN);
         DPRINTF(DEBUG_INPUT, "\n");
     }
-
-    // FIXME: what if msg is 1.5 times the size of the buffer (N)?
-    // The first N bytes will be thrown away, but the next 0.5 times will fit
-    // and be interpreted. Then we should throw an unknown cmd error.
-    
     return 0;
 }
 
