@@ -21,7 +21,7 @@
  * or however you set it up.
  */
 #define CMD_ARGS client* clients[], int client_no, char *prefix, char **params, int nparams
-typedef void (*cmd_handler_t)(CMD_ARGS);
+typedef int (*cmd_handler_t)(CMD_ARGS);
 #define COMMAND(cmd_name) int cmd_name(CMD_ARGS)
 
 struct dispatch {
@@ -51,13 +51,13 @@ COMMAND(cmdWho);
  * the command requires.  It may take more optional parameters.
  */
  struct dispatch cmds[] = {/* cmd,    reg  #parm  function usage*/
-                           { "NICK",    0, 1, cmdNickm,    "NICK <nickname>"},
+                           { "NICK",    0, 1, cmdNick,    "NICK <nickname>"},
                            { "USER",    0, 4, cmdUser,     "USER <username> <hostname> <servername> <realname>"},
                            { "QUIT",    1, 0, cmdQuit,     "QUIT [<Quit message>]"},
                            { "JOIN",    1, 1, cmdJoin,     "JOIN <channel>"},
                            { "PART",    1, 1, cmdPart,     "PART <channel>"},
                            { "LIST",    1, 0, cmdList,     "LIST"},
-                           { "PRIVMSG", 1, 2, cmdPrivmsg,  "PRIVMSG <target> <text to be sent>"},
+                           { "PRIVMSG", 1, 2, cmdPmsg,  "PRIVMSG <target> <text to be sent>"},
                            { "WHO",     1, 0, cmdWho,      "WHO [<name>]"},
                           };
 
@@ -101,7 +101,7 @@ void handleLine(char *line, client* clients[], int client_no)
         char err_msg[RFC_MAX_MSG_LEN];
         char server_hostname[MAX_HOSTNAME];
         get_server_hostname(server_hostname);
-        sprintf(err_msg, ":%s %d %s %s :Unknown command\r\n", server_hostname, ERR_NEEDMOREPARAMS, cli->nick, cmds[i].cmd);
+        sprintf(err_msg, ":%s %d %s %s :Unknown command\r\n", server_hostname, ERR_NEEDMOREPARAMS, cli->nick, command);
         write(cli->sock, err_msg, strlen(err_msg)+1);
         return;
     }
@@ -114,7 +114,7 @@ void handleLine(char *line, client* clients[], int client_no)
         char err_msg[RFC_MAX_MSG_LEN];
         char server_hostname[MAX_HOSTNAME];
         get_server_hostname(server_hostname);
-        sprintf(err_msg, ":%s %d %s %s :Unknown command\r\n", server_hostname, ERR_NEEDMOREPARAMS, cli->nick, cmds[i].cmd);
+        sprintf(err_msg, ":%s %d %s %s :Unknown command\r\n", server_hostname, ERR_NEEDMOREPARAMS, cli->nick, command);
         write(cli->sock, err_msg, strlen(err_msg)+1);
         /* Send an unknown command error! */
         return;
@@ -192,7 +192,7 @@ void handleLine(char *line, client* clients[], int client_no)
                  * to send it the right params per your program
                  * structure. */
                 // FIXME: check prefix match here
-                return (*cmds[i].handler)(clients, client_no, prefix, params, nparams);
+                (*cmds[i].handler)(clients, client_no, prefix, params, nparams);
             }
             break;
         }
@@ -215,21 +215,21 @@ void handleLine(char *line, client* clients[], int client_no)
 // char *longer = strcat_l(strs, 2);
 // free(longer);
 // *longer is now "abcdef"
-static char *strcat_l(char *strs[], int size) {
-    int i;
-    int total_length = 0;
-    for (i=0; i < size; i++) {
-        total_length += strlen(strs[i]);
-    }
-
-    char *result = (char *) malloc(total_length+1);
-    strcpy(result, strs[0]);
-    for (i=1; i < size; i++) {
-        strcat(result, strs[i]);
-    }
-
-    return result;
-}
+// static char *strcat_l(char *strs[], int size) {
+//     int i;
+//     int total_length = 0;
+//     for (i=0; i < size; i++) {
+//         total_length += strlen(strs[i]);
+//     }
+//
+//     char *result = (char *) malloc(total_length+1);
+//     strcpy(result, strs[0]);
+//     for (i=1; i < size; i++) {
+//         strcat(result, strs[i]);
+//     }
+//
+//     return result;
+// }
 
 
 
@@ -490,6 +490,8 @@ int cmdNick(CMD_ARGS)
 }
 
 int cmdUser(CMD_ARGS){
+    client *cli = clients[client_no];
+
     // checking prefix
     // ONLY execute the command either when no prefix is provided or when the
     // provided prefix matches the client's username
@@ -512,8 +514,8 @@ int cmdUser(CMD_ARGS){
         strcpy(cli->realname, params[3]);
         // and check if the client becomes registered
         // fix /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        if (!cli->nick) {
-          cli->registered = 1;
+        if (cli->nick[0]) {
+            cli->registered = 1;
         }
     }
 
@@ -523,7 +525,50 @@ int cmdUser(CMD_ARGS){
 
 int cmdQuit(CMD_ARGS)
 {
-    /* do something */
+    client *cli = clients[client_no];
+
+    // checking prefix
+    // ONLY execute the command either when no prefix is provided or when the
+    // provided prefix matches the client's username
+    // otherwise silently ignore the command
+    if (!prefix || !strcmp(prefix, cli->nick)) {
+        // close the connection
+        close(cli->sock);
+
+        char quit_msg[RFC_MAX_MSG_LEN];
+        // echo quit message to all users on the same channel
+        // if given quit message
+        if (!nparams) {
+            for (int i = 0; i < MAX_CLIENTS; i++) {
+                client* other = clients[i];
+                if (i == client_no) continue;
+                if (other && other->registered &&
+                    !strncmp(other->channel, cli->channel, RFC_MAX_NICKNAME))
+                {
+                    sprintf(quit_msg, ":%s!%s@%s QUIT :%s", cli->nick, cli->user, cli->hostname, params[0]);
+                    write(other->sock, quit_msg, strlen(quit_msg)+1);
+                }
+            }
+        }
+        // else default quit message
+        else {
+            for (int i = 0; i < MAX_CLIENTS; i++) {
+                client* other = clients[i];
+                if (i == client_no) continue;
+                if (other && other->registered &&
+                    !strncmp(other->channel, cli->channel, RFC_MAX_NICKNAME))
+                {
+                    sprintf(quit_msg, ":%s!%s@%s QUIT :Connection closed", cli->nick, cli->user, cli->hostname);
+                    write(other->sock, quit_msg, strlen(quit_msg)+1);
+                }
+            }
+        }
+
+        // delete client information
+        // fix /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        cli = NULL;
+    }
+    // prefix mismatch is not counted as error
     return 0;
 }
 
