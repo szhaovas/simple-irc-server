@@ -19,6 +19,8 @@ sircs/sircs-xcode/sircs.xcodeproj/xcuserdata/
 */*-client
 */sircc
 */sircs
+echo-cli-srv/
+my-echo-cli-srv/
 
 # Prerequisites
 *.d
