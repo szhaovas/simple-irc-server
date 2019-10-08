@@ -27,6 +27,7 @@ struct dispatch {
     int needreg; /* Must the user be registered to issue this cmd? */
     int minparams; /* send NEEDMOREPARAMS if < this many params */
     cmd_handler_t handler;
+    char *usgae; /* Usage instructions */
 };
 
 #define NELMS(array) (sizeof(array) / sizeof(array[0]))
@@ -47,17 +48,16 @@ COMMAND(cmdWho);
  * to call this function".  "#param" is the # of parameters that
  * the command requires.  It may take more optional parameters.
  */
-struct dispatch cmds[] = {
-    /* cmd,    reg  #parm  function */
-    { "NICK",    0, 1, cmdNick }, // Basic
-    { "USER",    0, 4, cmdUser },
-    { "QUIT",    1, 0, cmdQuit },
-    { "JOIN",    1, 1, cmdJoin }, // Channel
-    { "PART",    1, 1, cmdPart },
-    { "LIST",    1, 0, cmdList },
-    { "PRIVMSG", 1, 1, cmdPmsg }, // Advanced
-    { "WHO",     1, 0, cmdWho }
-};
+ struct dispatch cmds[] = {/* cmd,    reg  #parm  function usage*/
+                           { "NICK",    0, 1, cmdNickm,    "NICK <nickname>"},
+                           { "USER",    0, 4, cmdUser,     "USER <username> <hostname> <servername> <realname>"},
+                           { "QUIT",    1, 0, cmdQuit,     "QUIT [<Quit message>]"},
+                           { "JOIN",    1, 1, cmdJoin,     "JOIN <channel>"},
+                           { "PART",    1, 1, cmdPart,     "PART <channel>"},
+                           { "LIST",    1, 0, cmdList,     "LIST"},
+                           { "PRIVMSG", 1, 2, cmdPrivmsg,  "PRIVMSG <target> <text to be sent>"},
+                           { "WHO",     1, 0, cmdWho,      "WHO [<name>]"},
+                          };
 
 /**
  * Handle a command line.  NOTE:  You will probably want to
@@ -74,55 +74,63 @@ struct dispatch cmds[] = {
 void handleLine(char *line, client *cli){
     // Empty messages are silently iginored (RFC)
     if (*line == '\0') return;
-    
+
     char *prefix = NULL, *command, *pstart, *params[MAX_MSG_TOKENS];
     int nparams = 0;
     char *trailing = NULL;
-    
+
     DPRINTF(DEBUG_INPUT, "Handling line: %s\n", line);
     command = line;
-    
+
     if (*line == ':'){
         prefix = ++line;
         command = strchr(prefix, ' ');
     }
-    
+
     if (!command || *command == '\0'){
         /* Send an unknown command error! */
-        //some_of_your_code_better_go_here();
+        char err_msg[RFC_MAX_MSG_LEN];
+        char server_hostname[MAX_HOSTNAME];
+        get_server_hostname(server_hostname);
+        sprintf(err_msg, ":%s %d %s %s :Unknown command\r\n", server_hostname, ERR_NEEDMOREPARAMS, cli->nick, cmds[i].cmd);
+        write(cli->sock, err_msg, strlen(err_msg)+1);
         return;
     }
-    
+
     while (*command == ' '){
         *command++ = 0;
     }
-    
+
     if (*command == '\0'){
-        // and_more_of_your_code_should_go_here();
+        char err_msg[RFC_MAX_MSG_LEN];
+        char server_hostname[MAX_HOSTNAME];
+        get_server_hostname(server_hostname);
+        sprintf(err_msg, ":%s %d %s %s :Unknown command\r\n", server_hostname, ERR_NEEDMOREPARAMS, cli->nick, cmds[i].cmd);
+        write(cli->sock, err_msg, strlen(err_msg)+1);
         /* Send an unknown command error! */
         return;
     }
-    
+
     pstart = strchr(command, ' ');
-    
+
     if (pstart){
         while (*pstart == ' ')
             *pstart++ = '\0';
-        
+
         if (*pstart == ':'){
             trailing = pstart;
         } else{
             trailing = strstr(pstart, " :");
         }
-        
+
         if (trailing){
             while (*trailing == ' ')
                 *trailing++ = 0;
-            
+
             if (*trailing == ':')
                 *trailing++ = 0;
         }
-        
+
         do{
             if (*pstart != '\0'){
                 params[nparams++] = pstart;
@@ -130,38 +138,46 @@ void handleLine(char *line, client *cli){
                 break;
             }
             pstart = strchr(pstart, ' ');
-            
+
             if (pstart){
                 while (*pstart == ' ')
                     *pstart++ = '\0';
             }
         } while (pstart != NULL && nparams < MAX_MSG_TOKENS);
     }
-    
+
     if (trailing && nparams < MAX_MSG_TOKENS){
         params[nparams++] = trailing;
     }
-    
+
     DPRINTF(DEBUG_INPUT, "Prefix:  %s\nCommand: %s\nParams (%d):\n",
             prefix ? prefix : "<none>", command, nparams);
-    
+
     int i;
     for (i = 0; i < nparams; i++){
         DPRINTF(DEBUG_INPUT, "   %s\n", params[i]);
     }
-    
+
     DPRINTF(DEBUG_INPUT, "\n");
-    
+
     for (i = 0; i < NELMS(cmds); i++){
         if (!strcasecmp(cmds[i].cmd, command)){
             if (cmds[i].needreg && !cli->registered){
-                // youshouldputcodehere();
+                char err_msg[RFC_MAX_MSG_LEN];
+                char server_hostname[MAX_HOSTNAME];
+                get_server_hostname(server_hostname);
+                sprintf(err_msg, ":%s %d %s :You have not registered\r\n", server_hostname, ERR_NOTREGISTERED, cli->nick);
+                write(cli->sock, err_msg, strlen(err_msg)+1);
                 /* ERROR - the client is not registered and they need
                  * to be in order to use this command! */
             } else if (nparams < cmds[i].minparams){
                 /* ERROR - the client didn't specify enough parameters
                  * for this command! */
-                // and_you_should_put_code_here_too();
+                 char err_msg[RFC_MAX_MSG_LEN];
+                 char server_hostname[MAX_HOSTNAME];
+                 get_server_hostname(server_hostname);
+                 sprintf(err_msg, ":%s %d %s %s :Not enough parameters\r\n", server_hostname, ERR_NEEDMOREPARAMS, cli->nick, cmds[i].cmd);
+                 write(cli->sock, err_msg, strlen(err_msg)+1);
             } else {
                 /* Here's the call to the cmd_foo handler... modify
                  * to send it the right params per your program
@@ -171,44 +187,105 @@ void handleLine(char *line, client *cli){
             break;
         }
     }
-    
+
     if (i == NELMS(cmds)){
         /* ERROR - unknown command! */
-        // yet_again_you_should_put_code_here();
+        char err_msg[RFC_MAX_MSG_LEN];
+        char server_hostname[MAX_HOSTNAME];
+        get_server_hostname(server_hostname);
+        sprintf(err_msg, ":%s %d %s %s :Unknown command\r\n", server_hostname, ERR_NEEDMOREPARAMS, cli->nick, cmds[i].cmd);
+        write(cli->sock, err_msg, strlen(err_msg)+1);
     }
+}
+
+// cat all strings in strs together and return the result pointer
+// remember to free result pointer after use
+// e.g.
+// char *strs[] = {"abc", "def"};
+// char *longer = strcat_l(strs, 2);
+// free(longer);
+// *longer is now "abcdef"
+static char *strcat_l(char *strs[], int size) {
+    int i;
+    int total_length = 0;
+    for (i=0; i < size; i++) {
+        total_length += strlen(strs[i]);
+    }
+
+    char *result = (char *) malloc(total_length+1);
+    strcpy(result, strs[0]);
+    for (i=1; i < size; i++) {
+        strcat(result, strs[i]);
+    }
+
+    return result;
 }
 
 
 /* Command handlers */
 /* MODIFY to take the arguments you specified above! */
-void cmdNick(client *cli, char *prefix, char **params, int nparams){
+int cmdNick(CMD_ARGS){
     /* do something */
 }
 
-void cmdUser(client *cli, char *prefix, char **params, int nparams){
-    /* do something */
+int cmdUser(CMD_ARGS){
+    // checking prefix
+    // ONLY execute the command either when no prefix is provided or when the
+    // provided prefix matches the client's username
+    // otherwise silently ignore the command
+    if (!prefix || !strcmp(prefix, cli->nick)) {
+        // send error message if already registered
+        if (cli->registered) {
+            char err_msg[RFC_MAX_MSG_LEN];
+            char server_hostname[MAX_HOSTNAME];
+            get_server_hostname(server_hostname);
+            sprintf(err_msg, ":%s %d %s :You may not reregister\r\n", server_hostname, ERR_ALREADYREGISTRED, cli->nick);
+            return write(cli->sock, err_msg, strlen(err_msg)+1);
+        }
+
+        // otherwise store user information
+        // if the client is not registered but already has a set of user information (e.g. hasn't run NICK but has run USER),
+        //     we allow the existing user infomation to be overwritten
+        strcpy(cli->user, params[0]);
+        strcpy(cli->servername, params[2]);
+        strcpy(cli->realname, params[3]);
+        // and check if the client becomes registered
+        // fix /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        if (!cli->nick) {
+          cli->registered = 1;
+        }
+    }
+
+    // prefix mismatch is not counted as error
+    return 0;
 }
 
-void cmdQuit(client *cli, char *prefix, char **params, int nparams){
+int cmdQuit(CMD_ARGS){
     /* do something */
+    return 0;
 }
 
-void cmdJoin(client *cli, char *prefix, char **params, int nparams){
+int cmdJoin(CMD_ARGS){
     /* do something */
+    return 0;
 }
 
-void cmdPart(client *cli, char *prefix, char **params, int nparams){
+int cmdPart(CMD_ARGS){
     /* do something */
+    return 0;
 }
 
-void cmdList(client *cli, char *prefix, char **params, int nparams){
+int cmdList(CMD_ARGS){
     /* do something */
+    return 0;
 }
 
-void cmdPmsg(client *cli, char *prefix, char **params, int nparams){
+int cmdPmsg(CMD_ARGS){
     /* do something */
+    return 0;
 }
 
-void cmdWho(client *cli, char *prefix, char **params, int nparams){
+int cmdWho(CMD_ARGS){
     /* do something */
+    return 0;
 }
