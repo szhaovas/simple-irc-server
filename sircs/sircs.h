@@ -13,6 +13,9 @@
 #define MAX_REALNAME 192
 #define MAX_CHANNAME 64
 
+#define RFC_MAX_MSG_LEN 512
+#define RFC_MAX_NICKNAME 9
+
 typedef struct{
     int sock;
     struct sockaddr_in cliaddr;
@@ -27,15 +30,16 @@ typedef struct{
     char channel[MAX_CHANNAME];
 } client;
 
-
-int build_fd_set(fd_set* fds, int listenfd, client* clients[], int max_clients);
+int build_fd_set(fd_set* fds, int listenfd, client* clients[]);
 
 int set_non_blocking(int fd);
 
-int handle_new_connection(int listenfd, client* clients[], int* num_clients, int max_clients);
+int handle_new_connection(int listenfd, client* clients[], int* num_clients);
 
-int handle_data(client* cli, char snd_buf[]);
+int handle_data(client* clients[], int client_no, char* snd_buf);
 
 void exit_on_error(long __rc, const char* str);
+
+char* get_server_hostname(char* buf);
 
 #endif /* _SIRCS_H_ */
