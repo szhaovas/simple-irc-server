@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BFB68878234D024900D49DE8 /* linked-list.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB68876234D024900D49DE8 /* linked-list.c */; };
+		BFB68879234D098300D49DE8 /* linked-list.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB68876234D024900D49DE8 /* linked-list.c */; };
+		BFB6887A234D09D300D49DE8 /* debug.c in Sources */ = {isa = PBXBuildFile; fileRef = BFE96C68234A4C5E0089CED5 /* debug.c */; };
 		BFE96C69234A4C5E0089CED5 /* sircs.c in Sources */ = {isa = PBXBuildFile; fileRef = BFE96C67234A4C5E0089CED5 /* sircs.c */; };
 		BFE96C6A234A4C5E0089CED5 /* debug.c in Sources */ = {isa = PBXBuildFile; fileRef = BFE96C68234A4C5E0089CED5 /* debug.c */; };
 		BFE96C6D234A77C50089CED5 /* irc-proto.c in Sources */ = {isa = PBXBuildFile; fileRef = BFE96C6B234A77C50089CED5 /* irc-proto.c */; };
@@ -35,6 +38,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		BFB68876234D024900D49DE8 /* linked-list.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "linked-list.c"; path = "../../linked-list.c"; sourceTree = "<group>"; };
+		BFB68877234D024900D49DE8 /* linked-list.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "linked-list.h"; path = "../../linked-list.h"; sourceTree = "<group>"; };
 		BFE96C5B234A4C270089CED5 /* sircs */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = sircs; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFE96C65234A4C5E0089CED5 /* debug.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = debug.h; path = ../../debug.h; sourceTree = "<group>"; };
 		BFE96C66234A4C5E0089CED5 /* sircs.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = sircs.h; path = ../../sircs.h; sourceTree = "<group>"; };
@@ -85,6 +90,8 @@
 		BFE96C5D234A4C270089CED5 /* sircs-xcode */ = {
 			isa = PBXGroup;
 			children = (
+				BFB68876234D024900D49DE8 /* linked-list.c */,
+				BFB68877234D024900D49DE8 /* linked-list.h */,
 				BFE96C6B234A77C50089CED5 /* irc-proto.c */,
 				BFE96C6C234A77C50089CED5 /* irc-proto.h */,
 				BFE96C68234A4C5E0089CED5 /* debug.c */,
@@ -182,6 +189,7 @@
 			files = (
 				BFE96C6A234A4C5E0089CED5 /* debug.c in Sources */,
 				BFE96C6D234A77C50089CED5 /* irc-proto.c in Sources */,
+				BFB68878234D024900D49DE8 /* linked-list.c in Sources */,
 				BFE96C69234A4C5E0089CED5 /* sircs.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -190,6 +198,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BFB6887A234D09D300D49DE8 /* debug.c in Sources */,
+				BFB68879234D098300D49DE8 /* linked-list.c in Sources */,
 				BFE96C7B234B662C0089CED5 /* unit-test.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

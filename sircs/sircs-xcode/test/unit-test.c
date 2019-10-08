@@ -12,9 +12,10 @@
 #include <errno.h>      // errno
 #include <sys/select.h> // select(), fd_set, etc.
 
-#include "debug.h"
 #include <sys/types.h>
 #include <netinet/in.h>
+#include "../../linked-list.h"
+#include "../../debug.h"
 
 #define MAX_CLIENTS 512
 #define MAX_MSG_TOKENS 10
@@ -48,14 +49,64 @@ void set_buf(char* str, int buf_size);
 void test_buf(char* str, char* snd_buf);
 void test_buf2(char* pre, char* str, char* snd_buf);
 void print_repr(char* str);
+void test_linked_list(void);
 
 int test = 0;
 client* c;
 
 int main(int argc, char* argv[])
 {
-//    set_debug("all");
+    test_linked_list();
+}
+
+void print_list(LinkedList* l)
+{
+    char buf[1024];
+    list_to_str(l, buf);
+    printf("%s\n", buf);
+}
+
+void test_linked_list()
+{
     
+    LinkedList l;
+    init_list(&l);
+    print_list(&l);
+    
+    add_item(&l, (void*) 0);
+    print_list(&l);
+    
+    add_item(&l, (void*) 1);
+    add_item(&l, (void*) 2);
+    add_item(&l, (void*) 3);
+    print_list(&l);
+    
+    // Dropping current node
+    for (Iterator_LinkedList* it = iter(&l); !iter_empty(it); it = iter_next(it))
+    {
+        iter_drop(it);
+        print_list(&l);
+    }
+    
+    add_item(&l, (void*) 4);
+    add_item(&l, (void*) 5);
+    add_item(&l, (void*) 6);
+    add_item(&l, (void*) 7);
+    print_list(&l);
+    
+    // Dropping previous node
+    for (Iterator_LinkedList* it = iter(&l); !iter_empty(it); it = iter_next(it))
+    {
+        Node* new_node = iter_add(it, (void*) 0);
+        iter_drop_node(it, new_node);
+        print_list(&l);
+    }
+}
+
+
+
+void test_handle_data()
+{
     char snd_buf[MAX_MSG_LEN+1];
     c = malloc(sizeof(client));
     
@@ -76,8 +127,8 @@ int main(int argc, char* argv[])
     test_buf2("1", "234\n", snd_buf);
     test_buf2("1234", "5\n", snd_buf);
     test_buf2("1", "2\n3\n4", snd_buf);
-    
 }
+
 
 void set_buf(char* str, int buf_size)
 {
