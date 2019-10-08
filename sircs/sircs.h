@@ -14,6 +14,9 @@
 #define MAX_REALNAME 192
 #define MAX_CHANNAME 64
 
+#define RFC_MAX_MSG_LEN 512
+#define RFC_MAX_NICKNAME 9
+
 typedef struct{
     int sock;
     struct sockaddr_in cliaddr;
