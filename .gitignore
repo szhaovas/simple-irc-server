@@ -15,7 +15,8 @@ Icon
 # Project-specific files
 */*-server
 */*-client
-
+*/sircc
+*/sircs
 
 # Prerequisites
 *.d
