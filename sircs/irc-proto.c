@@ -29,7 +29,6 @@ struct dispatch {
     int needreg; /* Must the user be registered to issue this cmd? */
     int minparams; /* send NEEDMOREPARAMS if < this many params */
     cmd_handler_t handler;
-    char *usgae; /* Usage instructions */
 };
 
 #define NELMS(array) (sizeof(array) / sizeof(array[0]))
@@ -51,14 +50,14 @@ COMMAND(cmdWho);
  * the command requires.  It may take more optional parameters.
  */
  struct dispatch cmds[] = {/* cmd,    reg  #parm  function usage*/
-                           { "NICK",    0, 1, cmdNick,    "NICK <nickname>"},
-                           { "USER",    0, 4, cmdUser,     "USER <username> <hostname> <servername> <realname>"},
-                           { "QUIT",    1, 0, cmdQuit,     "QUIT [<Quit message>]"},
-                           { "JOIN",    1, 1, cmdJoin,     "JOIN <channel>"},
-                           { "PART",    1, 1, cmdPart,     "PART <channel>"},
-                           { "LIST",    1, 0, cmdList,     "LIST"},
-                           { "PRIVMSG", 1, 2, cmdPmsg,  "PRIVMSG <target> <text to be sent>"},
-                           { "WHO",     1, 0, cmdWho,      "WHO [<name>]"},
+                           { "NICK",    0, 1, cmdNick},
+                           { "USER",    0, 4, cmdUser},
+                           { "QUIT",    1, 0, cmdQuit},
+                           { "JOIN",    1, 1, cmdJoin},
+                           { "PART",    1, 1, cmdPart},
+                           { "LIST",    1, 0, cmdList},
+                           { "PRIVMSG", 1, 2, cmdPmsg},
+                           { "WHO",     1, 0, cmdWho},
                           };
 
 /**
@@ -208,30 +207,6 @@ void handleLine(char *line, client* clients[], int client_no)
     }
 }
 
-// cat all strings in strs together and return the result pointer
-// remember to free result pointer after use
-// e.g.
-// char *strs[] = {"abc", "def"};
-// char *longer = strcat_l(strs, 2);
-// free(longer);
-// *longer is now "abcdef"
-// static char *strcat_l(char *strs[], int size) {
-//     int i;
-//     int total_length = 0;
-//     for (i=0; i < size; i++) {
-//         total_length += strlen(strs[i]);
-//     }
-//
-//     char *result = (char *) malloc(total_length+1);
-//     strcpy(result, strs[0]);
-//     for (i=1; i < size; i++) {
-//         strcat(result, strs[i]);
-//     }
-//
-//     return result;
-// }
-
-
 
 /**
  * Check if character |c| is a special character.
@@ -244,7 +219,6 @@ int isspecial_(char c)
 {
     return strchr("-[]|\\`^{}", c) != NULL;
 }
-
 
 
 /**
