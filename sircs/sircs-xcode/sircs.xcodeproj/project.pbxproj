@@ -7,13 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		BFB68878234D024900D49DE8 /* linked-list.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB68876234D024900D49DE8 /* linked-list.c */; };
-		BFB68879234D098300D49DE8 /* linked-list.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB68876234D024900D49DE8 /* linked-list.c */; };
-		BFB6887A234D09D300D49DE8 /* debug.c in Sources */ = {isa = PBXBuildFile; fileRef = BFE96C68234A4C5E0089CED5 /* debug.c */; };
-		BFE96C69234A4C5E0089CED5 /* sircs.c in Sources */ = {isa = PBXBuildFile; fileRef = BFE96C67234A4C5E0089CED5 /* sircs.c */; };
-		BFE96C6A234A4C5E0089CED5 /* debug.c in Sources */ = {isa = PBXBuildFile; fileRef = BFE96C68234A4C5E0089CED5 /* debug.c */; };
-		BFE96C6D234A77C50089CED5 /* irc-proto.c in Sources */ = {isa = PBXBuildFile; fileRef = BFE96C6B234A77C50089CED5 /* irc-proto.c */; };
 		BFE96C7B234B662C0089CED5 /* unit-test.c in Sources */ = {isa = PBXBuildFile; fileRef = BFE96C6E234B653E0089CED5 /* unit-test.c */; };
+		EEB960A3234D3C8B00A7954A /* debug.c in Sources */ = {isa = PBXBuildFile; fileRef = EEB9609C234D3C8B00A7954A /* debug.c */; };
+		EEB960A4234D3C8B00A7954A /* irc-proto.c in Sources */ = {isa = PBXBuildFile; fileRef = EEB9609E234D3C8B00A7954A /* irc-proto.c */; };
+		EEB960A5234D3C8B00A7954A /* sircs.c in Sources */ = {isa = PBXBuildFile; fileRef = EEB9609F234D3C8B00A7954A /* sircs.c */; };
+		EEB960A6234D3C8B00A7954A /* linked-list.c in Sources */ = {isa = PBXBuildFile; fileRef = EEB960A1234D3C8B00A7954A /* linked-list.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -39,17 +37,17 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		BFB68876234D024900D49DE8 /* linked-list.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "linked-list.c"; path = "../../linked-list.c"; sourceTree = "<group>"; };
-		BFB68877234D024900D49DE8 /* linked-list.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "linked-list.h"; path = "../../linked-list.h"; sourceTree = "<group>"; };
 		BFE96C5B234A4C270089CED5 /* sircs */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = sircs; sourceTree = BUILT_PRODUCTS_DIR; };
-		BFE96C65234A4C5E0089CED5 /* debug.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = debug.h; path = ../../debug.h; sourceTree = "<group>"; };
-		BFE96C66234A4C5E0089CED5 /* sircs.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = sircs.h; path = ../../sircs.h; sourceTree = "<group>"; };
-		BFE96C67234A4C5E0089CED5 /* sircs.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = sircs.c; path = ../../sircs.c; sourceTree = "<group>"; };
-		BFE96C68234A4C5E0089CED5 /* debug.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = debug.c; path = ../../debug.c; sourceTree = "<group>"; };
-		BFE96C6B234A77C50089CED5 /* irc-proto.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "irc-proto.c"; path = "../../irc-proto.c"; sourceTree = "<group>"; };
-		BFE96C6C234A77C50089CED5 /* irc-proto.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "irc-proto.h"; path = "../../irc-proto.h"; sourceTree = "<group>"; };
 		BFE96C6E234B653E0089CED5 /* unit-test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = "unit-test.c"; sourceTree = "<group>"; };
 		BFE96C74234B66140089CED5 /* test */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = test; sourceTree = BUILT_PRODUCTS_DIR; };
+		EEB9609B234D3C8B00A7954A /* irc-proto.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "irc-proto.h"; path = "../../irc-proto.h"; sourceTree = "<group>"; };
+		EEB9609C234D3C8B00A7954A /* debug.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = debug.c; path = ../../debug.c; sourceTree = "<group>"; };
+		EEB9609D234D3C8B00A7954A /* debug.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = debug.h; path = ../../debug.h; sourceTree = "<group>"; };
+		EEB9609E234D3C8B00A7954A /* irc-proto.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "irc-proto.c"; path = "../../irc-proto.c"; sourceTree = "<group>"; };
+		EEB9609F234D3C8B00A7954A /* sircs.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = sircs.c; path = ../../sircs.c; sourceTree = "<group>"; };
+		EEB960A0234D3C8B00A7954A /* sircs.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = sircs.h; path = ../../sircs.h; sourceTree = "<group>"; };
+		EEB960A1234D3C8B00A7954A /* linked-list.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "linked-list.c"; path = "../../linked-list.c"; sourceTree = "<group>"; };
+		EEB960A2234D3C8B00A7954A /* linked-list.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "linked-list.h"; path = "../../linked-list.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -73,7 +71,7 @@
 		BFE96C52234A4C270089CED5 = {
 			isa = PBXGroup;
 			children = (
-				BFE96C5D234A4C270089CED5 /* sircs-xcode */,
+				EEB9609A234D3C7D00A7954A /* sircs-xcode */,
 				BFE96C75234B66140089CED5 /* test */,
 				BFE96C5C234A4C270089CED5 /* Products */,
 			);
@@ -88,27 +86,27 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		BFE96C5D234A4C270089CED5 /* sircs-xcode */ = {
-			isa = PBXGroup;
-			children = (
-				BFB68876234D024900D49DE8 /* linked-list.c */,
-				BFB68877234D024900D49DE8 /* linked-list.h */,
-				BFE96C6B234A77C50089CED5 /* irc-proto.c */,
-				BFE96C6C234A77C50089CED5 /* irc-proto.h */,
-				BFE96C68234A4C5E0089CED5 /* debug.c */,
-				BFE96C65234A4C5E0089CED5 /* debug.h */,
-				BFE96C67234A4C5E0089CED5 /* sircs.c */,
-				BFE96C66234A4C5E0089CED5 /* sircs.h */,
-			);
-			path = "sircs-xcode";
-			sourceTree = "<group>";
-		};
 		BFE96C75234B66140089CED5 /* test */ = {
 			isa = PBXGroup;
 			children = (
 				BFE96C6E234B653E0089CED5 /* unit-test.c */,
 			);
 			path = test;
+			sourceTree = "<group>";
+		};
+		EEB9609A234D3C7D00A7954A /* sircs-xcode */ = {
+			isa = PBXGroup;
+			children = (
+				EEB9609C234D3C8B00A7954A /* debug.c */,
+				EEB9609D234D3C8B00A7954A /* debug.h */,
+				EEB9609E234D3C8B00A7954A /* irc-proto.c */,
+				EEB9609B234D3C8B00A7954A /* irc-proto.h */,
+				EEB960A1234D3C8B00A7954A /* linked-list.c */,
+				EEB960A2234D3C8B00A7954A /* linked-list.h */,
+				EEB9609F234D3C8B00A7954A /* sircs.c */,
+				EEB960A0234D3C8B00A7954A /* sircs.h */,
+			);
+			path = "sircs-xcode";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -188,10 +186,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BFE96C6A234A4C5E0089CED5 /* debug.c in Sources */,
-				BFE96C6D234A77C50089CED5 /* irc-proto.c in Sources */,
-				BFB68878234D024900D49DE8 /* linked-list.c in Sources */,
-				BFE96C69234A4C5E0089CED5 /* sircs.c in Sources */,
+				EEB960A5234D3C8B00A7954A /* sircs.c in Sources */,
+				EEB960A3234D3C8B00A7954A /* debug.c in Sources */,
+				EEB960A6234D3C8B00A7954A /* linked-list.c in Sources */,
+				EEB960A4234D3C8B00A7954A /* irc-proto.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -199,8 +197,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BFB6887A234D09D300D49DE8 /* debug.c in Sources */,
-				BFB68879234D098300D49DE8 /* linked-list.c in Sources */,
 				BFE96C7B234B662C0089CED5 /* unit-test.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
