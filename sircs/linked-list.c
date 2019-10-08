@@ -5,10 +5,19 @@
 #include "linked-list.h"
 
 
+/* Constants */
 #define TRUE 1
 #define FALSE 0
 
 
+
+/* LinkedList */
+
+/**
+ * Initialze a linked list.
+ * This function be called once and only once before a linked list
+ * may be used.
+ */
 void init_list(LinkedList* list)
 {
     list->head = NULL;
@@ -17,6 +26,11 @@ void init_list(LinkedList* list)
     list->__count = 0;
 }
 
+
+
+/**
+ * Add an item, pointed to by |data|, to a linked list.
+ */
 Node* add_item(LinkedList* list, void* data)
 {
     // Allocate a new node
@@ -44,6 +58,11 @@ Node* add_item(LinkedList* list, void* data)
     return node;
 }
 
+
+
+/**
+ * Drop a node from a linked list.
+ */
 void drop_node(LinkedList* list, Node* node)
 {
     // Fix link
@@ -64,6 +83,11 @@ void drop_node(LinkedList* list, Node* node)
     list->size -= 1;
 }
 
+
+
+/**
+ * Convert a list to string and store it in the input buffer.
+ */
 char* list_to_str(LinkedList* list, char* buf)
 {
     *buf++ = '[';
@@ -79,6 +103,13 @@ char* list_to_str(LinkedList* list, char* buf)
     return buf;
 }
 
+
+
+/* Iterator_LinkedList */
+
+/**
+ * Obtain an iterator for the linked list |list|.
+ */
 Iterator_LinkedList* iter(LinkedList* list)
 {
     Iterator_LinkedList* it = malloc(sizeof(Iterator_LinkedList));
@@ -88,11 +119,26 @@ Iterator_LinkedList* iter(LinkedList* list)
     return it;
 }
 
+
+
+/**
+ * Check if an iterator contains any more node.
+ */
 int iter_empty(Iterator_LinkedList* it)
 {
     return it->curr == NULL;
 }
 
+
+
+/**
+ * Get the next iterator.
+ * To be used only in a for loop:
+        for (Iterator_LinkedList* it = iter(&l);
+            !iter_empty(it);
+            it = iter_next(it))
+        { // Your code here }
+ */
 Iterator_LinkedList* iter_next(Iterator_LinkedList* it)
 {
     if (!it->yielded)
@@ -102,12 +148,21 @@ Iterator_LinkedList* iter_next(Iterator_LinkedList* it)
     return it;
 }
 
+
+
+/**
+ * Add an item, pointed to by |data|, to the list referred to by the iterator.
+ */
 Node* iter_add(Iterator_LinkedList* it, void* data)
 {
     return add_item(it->list, data);
 }
 
-/* Drop the current item */
+
+
+/**
+ * Drop the current item from an iterator.
+ */
 void iter_drop(Iterator_LinkedList* it)
 {
     Node* to_be_dropped = it->curr;
@@ -115,6 +170,11 @@ void iter_drop(Iterator_LinkedList* it)
     drop_node(it->list, to_be_dropped);
 }
 
+
+
+/**
+ * Drop a node item from the list referred to by the iterator.
+ */
 void iter_drop_node(Iterator_LinkedList* it, Node* node)
 {
     if (node == it->curr)
@@ -123,6 +183,13 @@ void iter_drop_node(Iterator_LinkedList* it, Node* node)
         drop_node(it->list, node);
 }
 
+
+
+/**
+ * Yield the current item from the iterator.
+ * Note: this function will increment the pointer, so the same node
+ * will never be yielded twice.
+ */
 Node* iter_yield(Iterator_LinkedList* it)
 {
     assert(!it->yielded);
