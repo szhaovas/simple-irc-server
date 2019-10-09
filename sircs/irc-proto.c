@@ -418,14 +418,16 @@ int cmdNick(CMD_ARGS)
         {
             client_t* other = (client_t *) iter_yield(it);
             if (cli == other) continue;
-            if (other &&
-                *other->nick && // Note: we should not check |registered| here
+            if (*other->nick && // Note: we should not check |registered| here
                 check_colision(nick_len, nick_buf, other->nick))
             {
                 return reply(5, server_info, cli->sock, ERR_NICKNAMEINUSE, nick_buf, ":Nickname is already in use");
             }
         }
         // No collision
+        char old_nick[RFC_MAX_NICKNAME];
+        if (*cli->nick) // Make a copy of old nickname, if any
+            strcpy(old_nick, cli->nick);
         strcpy(cli->nick, nick_buf); // Edge case: new nick == old nick => no effect & no reply
 
         // User already has a nickname (updates old nickname) & is registered
@@ -439,7 +441,7 @@ int cmdNick(CMD_ARGS)
                 client_t* other = (client_t *) iter_yield(it);
                 if (cli == other) continue;
                 char originator_buf[RFC_MAX_NICKNAME + MAX_USERNAME + MAX_HOSTNAME + 2];
-                sprintf(originator_buf, "%s!%s@%s", cli->nick, cli->user, cli->hostname);
+                sprintf(originator_buf, "%s!%s@%s", old_nick, cli->user, cli->hostname);
                 return echo_cmd(5, server_info, other->sock, originator_buf, "NICK", cli->nick);
             }
         }
