@@ -490,7 +490,7 @@ void cmdQuit(CMD_ARGS)
                 if (!nparams)
                 {
                     WRITE(other->sock,
-                          ":%s!%s@%s QUIT :Connection closed",
+                          ":%s!%s@%s QUIT :Connection closed\r\n",
                           cli->nick,
                           cli->user,
                           cli->hostname);
@@ -499,7 +499,7 @@ void cmdQuit(CMD_ARGS)
                 else
                 {
                     WRITE(cli->sock,
-                          ":%s!%s@%s QUIT :%s",
+                          ":%s!%s@%s QUIT :%s\r\n",
                           cli->nick,
                           cli->user,
                           cli->hostname,
