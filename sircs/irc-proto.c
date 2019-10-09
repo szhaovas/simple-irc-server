@@ -28,7 +28,7 @@ typedef void (*cmd_handler_t)(CMD_ARGS);
 #define WRITE(sock, fmt, ...) do { dprintf(sock, fmt, ##__VA_ARGS__); } while (0)
 
 // Message of the day
-#define MOTD_STR "Lo and Behold"
+#define MOTD_STR "ようこそ、OZの世界へ"
 
 struct dispatch {
     char cmd[MAX_COMMAND];
