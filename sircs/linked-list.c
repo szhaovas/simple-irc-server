@@ -148,15 +148,17 @@ Iterator_LinkedList* iter(LinkedList* list)
  */
 int iter_empty(Iterator_LinkedList* it)
 {
-    if ( !it->curr )
-    {
-        free(it);
-        return 1;
-    }
-    else
-        return 0;
+    return !it->curr;
 }
 
+
+/**
+ * Clean iterator. Must be called once an iterator is no longer in use.
+ */
+void iter_clean(Iterator_LinkedList* it)
+{
+    free(it);
+}
 
 
 /**
@@ -204,4 +206,24 @@ void* iter_drop(Iterator_LinkedList* it)
 {
     Node* to_be_dropped = get_and_incr(it);
     return drop_node(it->list, to_be_dropped);
+}
+
+
+/**
+ * Drop an item from a linked list by iterating through it
+ */
+void drop_item(LinkedList* list, void* data)
+{
+    Iterator_LinkedList* it;
+    for (it = iter(list);
+         !iter_empty(it);
+         it = iter_next(it))
+    {
+        if (iter_get(it) == data)
+        {
+            iter_drop(it);
+            break;
+        }
+    }
+    iter_clean(it);
 }

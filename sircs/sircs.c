@@ -147,9 +147,8 @@ int main(int argc, char *argv[] ){
                 handle_new_connection(listenfd, server_info.clients);
             }
             // Check activities from connected sockets
-            for (Iterator_LinkedList* it = iter(server_info.clients);
-                 !iter_empty(it);
-                 it = iter_next(it))
+            Iterator_LinkedList* it;
+            for (it = iter(server_info.clients); !iter_empty(it); it = iter_next(it))
             {
                 client_t* cli = (client_t *) iter_get(it);
                 {
@@ -168,7 +167,8 @@ int main(int argc, char *argv[] ){
                         }
                     }
                 }
-            }
+            } /* iterator */
+            iter_clean(it);
         }
     }
     close(listenfd);
@@ -187,9 +187,8 @@ int build_fd_set(fd_set *fds, int listenfd, LinkedList* clients)
     FD_ZERO(fds);
     FD_SET(listenfd, fds);
     // update highfd
-    for (Iterator_LinkedList* it = iter(clients);
-         !iter_empty(it);
-         it = iter_next(it))
+    Iterator_LinkedList* it;
+    for (it = iter(clients); !iter_empty(it); it = iter_next(it))
     {
         client_t* cli = (client_t *) iter_get(it);
         int fd = cli->sock;
@@ -197,6 +196,7 @@ int build_fd_set(fd_set *fds, int listenfd, LinkedList* clients)
         if (fd > highfd) // Update |highfd| if necessary
             highfd = fd;
     }
+    iter_clean(it);
     return highfd;
 }
 

@@ -35,11 +35,15 @@ void init_list(LinkedList* list);
 
 Node* add_item(LinkedList* list, void* data);
 
+void drop_item(LinkedList* list, void* data);
+
 void* drop_node(LinkedList* list, Node* node);
 
 char* list_to_str(LinkedList* list, char* buf);
 
 Iterator_LinkedList* iter(LinkedList* list);
+
+void iter_clean(Iterator_LinkedList* it);
 
 int iter_empty(Iterator_LinkedList* it);
 

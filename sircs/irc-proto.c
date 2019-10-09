@@ -363,9 +363,8 @@ void cmdNick(CMD_ARGS)
     else /* nick valid */
     {
         // Check for nickname collision
-        for (Iterator_LinkedList* it = iter(server_info->clients);
-             !iter_empty(it);
-             it = iter_next(it))
+        Iterator_LinkedList* it;
+        for (it = iter(server_info->clients); !iter_empty(it); it = iter_next(it))
         {
             client_t* other = (client_t *) iter_get(it);
             if (cli == other) continue;
@@ -379,9 +378,10 @@ void cmdNick(CMD_ARGS)
                       ERR_NICKNAMEINUSE,
                       *cli->nick? cli->nick: "*",
                       nick_buf);
-                return;
+                return iter_clean(it);
             }
         }
+        iter_clean(it);
         
         /* No collision */
         
@@ -397,9 +397,8 @@ void cmdNick(CMD_ARGS)
         // => Echo NICK to everyone else in the same channel
         if (cli->channel)
         {
-            for (Iterator_LinkedList* it = iter(cli->channel->members);
-                 !iter_empty(it);
-                 it = iter_next(it))
+            Iterator_LinkedList* it;
+            for (it = iter(cli->channel->members); !iter_empty(it); it = iter_next(it))
             {
                 client_t* other = (client_t *) iter_get(it);
                 if (cli == other) continue;
@@ -410,7 +409,7 @@ void cmdNick(CMD_ARGS)
                       cli->hostname,
                       cli->nick);
             }
-            return;
+            return iter_clean(it);
         }
         
         // Otherwise, the client is not in any channel, so she is either
@@ -462,22 +461,19 @@ void cmdQuit(CMD_ARGS)
     close(cli->sock);
     
     // Remove client from the server's client list
-    for (Iterator_LinkedList* it = iter(server_info->clients);
-         !iter_empty(it);
-         it = iter_next(it)) // (Junrui) FIXME: This iterates over the whole list and defeats the purpose?
-    {
-        client_t* other = (client_t *) iter_get(it);
-        if (cli == other)
-            iter_drop(it);
-    }
+    // (Junrui) FIXME: This iterates over the whole list and defeats the purpose?
+    drop_item(server_info->clients, cli);
     
     // If the client has joined a channel, then we need to
-    //   1. remove her from the member list
-    //   2. echo QUIT to other members
+    //   1. Remove her from the member list
+    //   2. Echo QUIT to other members, if any
+    //   3. If the departing client is the last one in the channel,
+    //      then the channel is removed
     if (cli->channel)
     {
         // Loop through members from the client's channel
-        for (Iterator_LinkedList* it = iter(cli->channel->members);
+        Iterator_LinkedList* it;
+        for (it = iter(cli->channel->members);
              !iter_empty(it);
              it = iter_next(it))
         {
@@ -487,7 +483,7 @@ void cmdQuit(CMD_ARGS)
             if (cli == other)
                 iter_drop(it);
             
-            // Someone else => Echo quit message to other members
+            // Someone else => Echo quit message
             else
             {
                 // Client did not specify the farewell message => Use default
@@ -510,6 +506,12 @@ void cmdQuit(CMD_ARGS)
                           params[0]);
                 }
             }
+        } /* iterator */
+        iter_clean(it);
+        
+        if (cli->channel->members->size == 0)
+        {
+            drop_item(server_info->channels, cli->channel);
         }
     }
 }
