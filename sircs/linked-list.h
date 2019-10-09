@@ -32,15 +32,6 @@ void* drop_node(LinkedList* list, Node* node);
 char* list_to_str(LinkedList* list, char* buf);
 
 
-/* L */
-
-typedef struct {
-    LinkedList* list;
-    Node* curr;
-    int incremented;
-} Iterator_LinkedList;
-
-/*  */
 /**
  * Linked List Iterator.
  *
@@ -56,6 +47,12 @@ typedef struct {
      iter_clean(it);
  
 */
+
+typedef struct {
+    LinkedList* list;
+    Node* curr;
+    int incremented;
+} Iterator_LinkedList;
 
 Iterator_LinkedList* iter(LinkedList* list);
 
