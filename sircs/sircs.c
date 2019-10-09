@@ -66,8 +66,6 @@ int main(int argc, char *argv[] ){
     
     int __rc; // for return codes
     struct sockaddr_in srv_addr;
-    server_info_t server_info;
-    memset(&server_info, 0, sizeof(server_info));
     
     // Create listening socket
     int listenfd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -106,6 +104,8 @@ int main(int argc, char *argv[] ){
     
     
     /* Initialize server_info struct */
+    server_info_t server_info;
+    memset(&server_info, '\0', sizeof(server_info));
     
     // Get server hostname
     size_t hostname_len = sizeof(server_info.hostname);
@@ -131,7 +131,7 @@ int main(int argc, char *argv[] ){
     while (TRUE)
     {
         int highfd = build_fd_set(&fds, listenfd, server_info.clients);
-        int ready = select(highfd + 1, &fds, (fd_set *) 0, (fd_set *) 0, &timeout);
+        int ready  = select(highfd + 1, &fds, (fd_set *) 0, (fd_set *) 0, &timeout);
         exit_on_error(ready, "select() failed");
         
         if (ready == 0)
@@ -167,7 +167,7 @@ int main(int argc, char *argv[] ){
                         }
                     }
                 }
-            } /* iterator */
+            } /* Iterator loop */
             iter_clean(it);
         }
     }
@@ -235,8 +235,7 @@ int set_non_blocking(int fd)
  *   - cannot set connection socket to be non-blocking
  *   - cannot retrieve client's hostname using getnameinfo().
  */
-int handle_new_connection(int listenfd,
-                          LinkedList* clients)
+int handle_new_connection(int listenfd, LinkedList* clients)
 {
     // Accept any new connection
     struct sockaddr_in cli_addr;
@@ -349,12 +348,10 @@ int handle_data(server_info_t* server_info, client_t* cli)
             end = MIN(cr, lf);
         *end = '\0';
         
-        /* Replace the following with handleLine(msg, cli); */
-        // Replace start
         DPRINTF(DEBUG_INPUT, "Msg: %s\n", msg);
-        print_hex(DEBUG_INPUT, msg, MAX_MSG_LEN);
-        DPRINTF(DEBUG_INPUT, "\n");
-        // Replace end
+//        print_hex(DEBUG_INPUT, msg, MAX_MSG_LEN);
+//        DPRINTF(DEBUG_INPUT, "\n");
+
         handleLine(msg, server_info, cli);
         
         msg = end + 1;

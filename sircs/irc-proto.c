@@ -380,7 +380,7 @@ void cmdNick(CMD_ARGS)
                       nick_buf);
                 return iter_clean(it);
             }
-        }
+        } /* Iterator loop */
         iter_clean(it);
         
         /* No collision */
@@ -408,7 +408,7 @@ void cmdNick(CMD_ARGS)
                       cli->user,
                       cli->hostname,
                       cli->nick);
-            }
+            } /* Iterator loop */
             return iter_clean(it);
         }
         
@@ -506,13 +506,15 @@ void cmdQuit(CMD_ARGS)
                           params[0]);
                 }
             }
-        } /* iterator */
+        } /* Iterator loop */
         iter_clean(it);
         
         if (cli->channel->members->size == 0)
         {
             drop_item(server_info->channels, cli->channel);
         }
+        // FIXME: free channel struct
+        // FIXME: free client struct
     }
 }
 
