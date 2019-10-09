@@ -122,9 +122,6 @@ int main(int argc, char *argv[] ){
     init_list(channels);
     server_info.channels = channels;
     
-    // Send buffer
-    // (Nothing to do)
-    
     DPRINTF(DEBUG_INIT, "Simple IRC server listening on %s:%d, fd=%d\n",
             server_info.hostname,
             port,
@@ -374,10 +371,12 @@ int handle_data(server_info_t* server_info, client_t* cli)
     // Move this segment to the beginning of the buffer
     else
     {
-        strcpy(server_info->snd_buf, msg); // use send buffer as intermediate storage
+        char tmp[RFC_MAX_MSG_LEN+1];
+        tmp[RFC_MAX_MSG_LEN] = '\0';
+        strncpy(tmp, msg, RFC_MAX_MSG_LEN); // use send buffer as intermediate storage
         memset(&(cli->inbuf), '\0', MAX_MSG_LEN);
-        strcpy(cli->inbuf, server_info->snd_buf);
-        memset(server_info->snd_buf, '\0', MAX_MSG_LEN);
+        strcpy(cli->inbuf, tmp);
+        memset(tmp, '\0', MAX_MSG_LEN);
         cli->inbuf_size = (unsigned) strlen(cli->inbuf);
         
         DPRINTF(DEBUG_INPUT, "Incomplete msg: %s\n", cli->inbuf);

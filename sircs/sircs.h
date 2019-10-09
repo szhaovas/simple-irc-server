@@ -23,7 +23,6 @@ typedef struct __channel_struct channel_t;
 typedef struct {
 //    int listenfd;
     char hostname[MAX_HOSTNAME];
-    char snd_buf[RFC_MAX_MSG_LEN+1];
     LinkedList* clients;
     LinkedList* channels;
 } server_info_t;
