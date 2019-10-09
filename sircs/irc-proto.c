@@ -24,7 +24,11 @@
 typedef void (*cmd_handler_t)(CMD_ARGS);
 #define COMMAND(cmd_name) void cmd_name(CMD_ARGS)
 
+// Server reply macro
 #define WRITE(sock, fmt, ...) do { dprintf(sock, fmt, ##__VA_ARGS__); } while (0)
+
+// Message of the day
+#define MOTD_STR "Lo and Behold"
 
 struct dispatch {
     char cmd[MAX_COMMAND];
@@ -309,6 +313,30 @@ int check_collision(size_t this_len, char* this, char* that)
 }
 
 
+/**
+ * Send MOTD messages.
+ */
+void motd(int sock, char* hostname)
+{
+    WRITE(sock,
+          ":%s %d :- %s Message of the day - \r\n",
+          hostname,
+          RPL_MOTDSTART,
+          hostname);
+    
+    WRITE(sock,
+          ":%s %d :- %s\r\n",
+          hostname,
+          RPL_MOTD,
+          MOTD_STR);
+    
+    WRITE(sock,
+          ":%s %d :End of /MOTD command\r\n",
+          hostname,
+          RPL_ENDOFMOTD);
+}
+
+
 
 /* Command handlers */
 
@@ -391,7 +419,7 @@ void cmdNick(CMD_ARGS)
         if (!cli->registered && *cli->user)
         {
             cli->registered = 1;
-            // FIXME: send welcome message
+            motd(cli->sock, server_info->hostname);
         }
     }
 }
@@ -422,7 +450,7 @@ void cmdUser(CMD_ARGS){
     if (!cli->registered && *cli->nick)
     {
         cli->registered = 1;
-        // FIXME: send welcome message
+        motd(cli->sock, server_info->hostname);
     }
 }
 
