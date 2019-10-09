@@ -151,7 +151,7 @@ int main(int argc, char *argv[] ){
                  !iter_empty(it);
                  it = iter_next(it))
             {
-                client_t* cli = (client_t *) iter_yield(it);
+                client_t* cli = (client_t *) iter_get(it);
                 {
                     int sock = cli->sock;
                     if (FD_ISSET(sock, &fds))
@@ -191,7 +191,7 @@ int build_fd_set(fd_set *fds, int listenfd, LinkedList* clients)
          !iter_empty(it);
          it = iter_next(it))
     {
-        client_t* cli = (client_t *) iter_yield(it);
+        client_t* cli = (client_t *) iter_get(it);
         int fd = cli->sock;
         FD_SET(fd, fds); // Register this socket
         if (fd > highfd) // Update |highfd| if necessary
@@ -371,12 +371,15 @@ int handle_data(server_info_t* server_info, client_t* cli)
     // Move this segment to the beginning of the buffer
     else
     {
+        // Temporary buffer
         char tmp[RFC_MAX_MSG_LEN+1];
         tmp[RFC_MAX_MSG_LEN] = '\0';
-        strncpy(tmp, msg, RFC_MAX_MSG_LEN); // use send buffer as intermediate storage
+        // Copy msg -> tmp, with a maximum of RFC_MAX_MSG_LEN (512) characters
+        strncpy(tmp, msg, RFC_MAX_MSG_LEN);
+        // Clear input buffer
         memset(&(cli->inbuf), '\0', MAX_MSG_LEN);
+        // Copy tmp -> msg
         strcpy(cli->inbuf, tmp);
-        memset(tmp, '\0', MAX_MSG_LEN);
         cli->inbuf_size = (unsigned) strlen(cli->inbuf);
         
         DPRINTF(DEBUG_INPUT, "Incomplete msg: %s\n", cli->inbuf);

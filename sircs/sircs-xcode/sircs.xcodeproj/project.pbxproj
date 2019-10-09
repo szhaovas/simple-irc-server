@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BF8FBF3F234E737700E3EB3D /* linked-list.c in Sources */ = {isa = PBXBuildFile; fileRef = EEB960A1234D3C8B00A7954A /* linked-list.c */; };
+		BF8FBF40234E73C600E3EB3D /* debug.c in Sources */ = {isa = PBXBuildFile; fileRef = EEB9609C234D3C8B00A7954A /* debug.c */; };
 		BFE96C7B234B662C0089CED5 /* unit-test.c in Sources */ = {isa = PBXBuildFile; fileRef = BFE96C6E234B653E0089CED5 /* unit-test.c */; };
 		EEB960A3234D3C8B00A7954A /* debug.c in Sources */ = {isa = PBXBuildFile; fileRef = EEB9609C234D3C8B00A7954A /* debug.c */; };
 		EEB960A4234D3C8B00A7954A /* irc-proto.c in Sources */ = {isa = PBXBuildFile; fileRef = EEB9609E234D3C8B00A7954A /* irc-proto.c */; };
@@ -197,6 +199,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BF8FBF40234E73C600E3EB3D /* debug.c in Sources */,
+				BF8FBF3F234E737700E3EB3D /* linked-list.c in Sources */,
 				BFE96C7B234B662C0089CED5 /* unit-test.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

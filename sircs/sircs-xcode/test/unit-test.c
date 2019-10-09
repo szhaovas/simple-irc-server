@@ -72,11 +72,9 @@ void test_linked_list()
     LinkedList l;
     init_list(&l);
     print_list(&l);
-    
     add_item(&l, (void*) 0);
-    print_list(&l);
-    
-    add_item(&l, (void*) 1);
+    int i1 = 1;
+    add_item(&l, (void*) &i1);
     add_item(&l, (void*) 2);
     add_item(&l, (void*) 3);
     print_list(&l);
@@ -84,6 +82,7 @@ void test_linked_list()
     // Dropping current node
     for (Iterator_LinkedList* it = iter(&l); !iter_empty(it); it = iter_next(it))
     {
+        if (i1 == )
         iter_drop(it);
         print_list(&l);
     }
@@ -94,13 +93,13 @@ void test_linked_list()
     add_item(&l, (void*) 7);
     print_list(&l);
     
-    // Dropping previous node
-    for (Iterator_LinkedList* it = iter(&l); !iter_empty(it); it = iter_next(it))
-    {
-        Node* new_node = iter_add(it, (void*) 0);
-        iter_drop_node(it, new_node);
-        print_list(&l);
-    }
+//    // Dropping previous node
+//    for (Iterator_LinkedList* it = iter(&l); !iter_empty(it); it = iter_next(it))
+//    {
+//        Node* new_node = iter_add(it, (void*) 0);
+//        iter_drop_node(it, new_node);
+//        print_list(&l);
+//    }
 }
 
 

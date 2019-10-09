@@ -25,7 +25,7 @@ typedef struct {
 typedef struct {
     LinkedList* list;
     Node* curr;
-    int yielded;
+    int incremented;
 } Iterator_LinkedList;
 
 
@@ -45,14 +45,11 @@ int iter_empty(Iterator_LinkedList* it);
 
 Iterator_LinkedList* iter_next(Iterator_LinkedList* it);
 
+void* iter_get(Iterator_LinkedList* it);
+
 Node* iter_add(Iterator_LinkedList* it, void* data);
 
-/* Drop the current item */
 void* iter_drop(Iterator_LinkedList* it);
-
-void* iter_drop_node(Iterator_LinkedList* it, Node* node);
-
-void* iter_yield(Iterator_LinkedList* it);
 
 
 #endif /* _LINKED_LIST_H_ */

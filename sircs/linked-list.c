@@ -109,6 +109,26 @@ char* list_to_str(LinkedList* list, char* buf)
 
 /* Iterator_LinkedList */
 
+/* Private functions */
+
+/**
+ * Yield the current item from the iterator.
+ * Note: this function will increment the pointer, so the same node
+ * will never be yielded twice.
+ */
+Node* get_and_incr(Iterator_LinkedList* it)
+{
+    assert(!it->incremented);
+    it->incremented = TRUE;
+    Node* curr = it->curr;
+    it->curr = it->curr->next; // Advance by one node
+    return curr;
+}
+
+
+
+/* Public functions */
+
 /**
  * Obtain an iterator for the linked list |list|.
  */
@@ -117,7 +137,7 @@ Iterator_LinkedList* iter(LinkedList* list)
     Iterator_LinkedList* it = malloc(sizeof(Iterator_LinkedList));
     it->list = list;
     it->curr = list->head;
-    it->yielded = FALSE;
+    it->incremented = FALSE;
     return it;
 }
 
@@ -128,7 +148,13 @@ Iterator_LinkedList* iter(LinkedList* list)
  */
 int iter_empty(Iterator_LinkedList* it)
 {
-    return it->curr == NULL;
+    if ( !it->curr )
+    {
+        free(it);
+        return 1;
+    }
+    else
+        return 0;
 }
 
 
@@ -139,17 +165,26 @@ int iter_empty(Iterator_LinkedList* it)
         for (Iterator_LinkedList* it = iter(&l);
             !iter_empty(it);
             it = iter_next(it))
-        { // Your code here }
+        {
+            // iter_get, iter_add, iter_drop, etc.
+        }
  */
 Iterator_LinkedList* iter_next(Iterator_LinkedList* it)
 {
-    if (!it->yielded)
-        iter_yield(it);
-    else
-        it->yielded = FALSE;
+    if (!it->incremented)
+        get_and_incr(it);
+    it->incremented = FALSE;
     return it;
 }
 
+
+/**
+ * Return the current item from the iterator.
+ */
+void* iter_get(Iterator_LinkedList* it)
+{
+    return it->curr->data;
+}
 
 
 /**
@@ -167,36 +202,6 @@ Node* iter_add(Iterator_LinkedList* it, void* data)
  */
 void* iter_drop(Iterator_LinkedList* it)
 {
-    Node* to_be_dropped = it->curr;
-    iter_yield(it);
+    Node* to_be_dropped = get_and_incr(it);
     return drop_node(it->list, to_be_dropped);
-}
-
-
-
-/**
- * Drop a node item from the list referred to by the iterator.
- */
-void* iter_drop_node(Iterator_LinkedList* it, Node* node)
-{
-    if (node == it->curr)
-        return iter_drop(it);
-    else
-        return drop_node(it->list, node);
-}
-
-
-
-/**
- * Yield the current item from the iterator.
- * Note: this function will increment the pointer, so the same node
- * will never be yielded twice.
- */
-void* iter_yield(Iterator_LinkedList* it)
-{
-    assert(!it->yielded);
-    it->yielded = TRUE;
-    Node* curr = it->curr;
-    it->curr = it->curr->next;
-    return curr->data;
 }

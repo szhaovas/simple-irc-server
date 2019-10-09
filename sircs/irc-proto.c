@@ -20,9 +20,11 @@
  * e.g., void cmd_nick(your_client_thingy *c, char *prefix, ...)
  * or however you set it up.
  */
-#define CMD_ARGS server_info_t* server_info, client_t* cli, char *prefix, char **params, int nparams
+#define CMD_ARGS server_info_t* server_info, client_t* cli, char **params, int nparams
 typedef void (*cmd_handler_t)(CMD_ARGS);
 #define COMMAND(cmd_name) void cmd_name(CMD_ARGS)
+
+#define WRITE(sock, fmt, ...) do { dprintf(sock, fmt, ##__VA_ARGS__); } while (0)
 
 struct dispatch {
     char cmd[MAX_COMMAND];
@@ -49,16 +51,16 @@ COMMAND(cmdWho);
  * to call this function".  "#param" is the # of parameters that
  * the command requires.  It may take more optional parameters.
  */
- struct dispatch cmds[] = {/* cmd,    reg  #parm  function usage*/
-                           { "NICK",    0, 1, cmdNick},
-                           { "USER",    0, 4, cmdUser},
-                           { "QUIT",    1, 0, cmdQuit},
-                           { "JOIN",    1, 1, cmdJoin},
-                           { "PART",    1, 1, cmdPart},
-                           { "LIST",    1, 0, cmdList},
-                           { "PRIVMSG", 1, 2, cmdPmsg},
-                           { "WHO",     1, 0, cmdWho},
-                          };
+struct dispatch cmds[] = {/* cmd,    reg  #parm  function usage*/
+    { "NICK",    0, 1, cmdNick},
+    { "USER",    0, 4, cmdUser},
+    { "QUIT",    1, 0, cmdQuit},
+    { "JOIN",    1, 1, cmdJoin},
+    { "PART",    1, 1, cmdPart},
+    { "LIST",    1, 0, cmdList},
+    { "PRIVMSG", 1, 2, cmdPmsg},
+    { "WHO",     1, 0, cmdWho},
+};
 
 /**
  Helper functions.
@@ -81,59 +83,68 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
 {
     // Empty messages are silently iginored (as per RFC)
     if (*line == '\0') return;
-
+    
+    // Target name in replies
+    char* target = *cli->nick ? cli->nick : "*";
+    
     char *prefix = NULL, *command, *pstart, *params[MAX_MSG_TOKENS];
     int nparams = 0;
     char *trailing = NULL;
-
+    
     DPRINTF(DEBUG_INPUT, "Handling line: %s\n", line);
     command = line;
-
+    
     if (*line == ':'){
         prefix = ++line;
         command = strchr(prefix, ' ');
     }
-
+    
     if (!command || *command == '\0'){
-        /* Send an unknown command error! */
-        char err_msg[RFC_MAX_MSG_LEN];
-        sprintf(err_msg, ":%s %d %s %s :Unknown command\r\n", server_info->hostname, ERR_NEEDMOREPARAMS, cli->nick, command);
-        write(cli->sock, err_msg, strlen(err_msg)+1); // (Junrui) FIXME: unify reply (and handle write() errors)
+        // Send an unknown command error
+        WRITE(cli->sock,
+              ":%s %d %s %s :Unknown command\r\n",
+              server_info->hostname,
+              ERR_NEEDMOREPARAMS,
+              target,
+              command);
         return;
     }
-
+    
     while (*command == ' '){
         *command++ = 0;
     }
-
+    
     if (*command == '\0'){
-        char err_msg[RFC_MAX_MSG_LEN];
-        sprintf(err_msg, ":%s %d %s %s :Unknown command\r\n", server_info->hostname, ERR_NEEDMOREPARAMS, cli->nick, command);
-        write(cli->sock, err_msg, strlen(err_msg)+1); // (Junrui) FIXME: unify reply (and handle write() errors)
-        /* Send an unknown command error! */
+        // Send an unknown command error
+        WRITE(cli->sock,
+              ":%s %d %s %s :Unknown command\r\n",
+              server_info->hostname,
+              ERR_NEEDMOREPARAMS,
+              target,
+              command);
         return;
     }
-
+    
     pstart = strchr(command, ' ');
-
+    
     if (pstart){
         while (*pstart == ' ')
             *pstart++ = '\0';
-
+        
         if (*pstart == ':'){
             trailing = pstart;
         } else{
             trailing = strstr(pstart, " :");
         }
-
+        
         if (trailing){
             while (*trailing == ' ')
                 *trailing++ = 0;
-
+            
             if (*trailing == ':')
                 *trailing++ = 0;
         }
-
+        
         do{
             if (*pstart != '\0'){
                 params[nparams++] = pstart;
@@ -141,58 +152,73 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
                 break;
             }
             pstart = strchr(pstart, ' ');
-
+            
             if (pstart){
                 while (*pstart == ' ')
                     *pstart++ = '\0';
             }
         } while (pstart != NULL && nparams < MAX_MSG_TOKENS);
     }
-
+    
     if (trailing && nparams < MAX_MSG_TOKENS){
         params[nparams++] = trailing;
     }
-
+    
     DPRINTF(DEBUG_INPUT, "Prefix:  %s\nCommand: %s\nParams (%d):\n",
             prefix ? prefix : "<none>", command, nparams);
-
+    
     int i;
     for (i = 0; i < nparams; i++){
         DPRINTF(DEBUG_INPUT, "   %s\n", params[i]);
     }
-
+    
     DPRINTF(DEBUG_INPUT, "\n");
-
-    for (i = 0; i < NELMS(cmds); i++){
-        if (!strcasecmp(cmds[i].cmd, command)){
-            if (cmds[i].needreg && !cli->registered){
-                char err_msg[RFC_MAX_MSG_LEN];
-                sprintf(err_msg, ":%s %d %s :You have not registered\r\n", server_info->hostname, ERR_NOTREGISTERED, cli->nick);
-                write(cli->sock, err_msg, strlen(err_msg)+1); // (Junrui) FIXME: unify reply (and handle write() errors)
-                /* ERROR - the client is not registered and they need
-                 * to be in order to use this command! */
-            } else if (nparams < cmds[i].minparams){
-                /* ERROR - the client didn't specify enough parameters
-                 * for this command! */
-                 char err_msg[RFC_MAX_MSG_LEN];
-                 sprintf(err_msg, ":%s %d %s %s :Not enough parameters\r\n", server_info->hostname, ERR_NEEDMOREPARAMS, cli->nick, cmds[i].cmd);
-                 write(cli->sock, err_msg, strlen(err_msg)+1); // (Junrui) FIXME: unify reply (and handle write() errors)
-            } else {
-                /* Here's the call to the cmd_foo handler... modify
-                 * to send it the right params per your program
-                 * structure. */
-                // (Junrui) FIXME: check prefix match here
-                (*cmds[i].handler)(server_info, cli, prefix, params, nparams);
+    
+    // Ignore a command if provided with a prefix different from the client's nickname
+    if (prefix && *cli->nick && !strcmp(prefix, cli->nick))
+        return;
+    
+    for (i = 0; i < NELMS(cmds); i++)
+    {
+        // Specified command matches with a command (case-insensitive)
+        if (!strcasecmp(cmds[i].cmd, command))
+        {
+            // ERROR - the client needs to be in order to use this command
+            if (cmds[i].needreg && !cli->registered)
+            {
+                WRITE(cli->sock,
+                      ":%s %d %s :You have not registered\r\n",
+                      server_info->hostname,
+                      ERR_NOTREGISTERED,
+                      target);
             }
-            break;
+            else if (nparams < cmds[i].minparams)
+            {
+                // ERROR - the client didn't specify enough parameters for this command
+                WRITE(cli->sock,
+                      ":%s %d %s %s :Not enough parameters\r\n",
+                      server_info->hostname,
+                      ERR_NEEDMOREPARAMS,
+                      target,
+                      command);
+            }
+            else // Call cmd_foo handler.
+            {
+                (*cmds[i].handler)(server_info, cli, params, nparams);
+            }
+            return; /* Command already processed */
         }
     }
-
+    
     if (i == NELMS(cmds)){
-        /* ERROR - unknown command! */
-        char err_msg[RFC_MAX_MSG_LEN];
-        sprintf(err_msg, ":%s %d %s %s :Unknown command\r\n", server_info->hostname, ERR_NEEDMOREPARAMS, cli->nick, cmds[i].cmd);
-        write(cli->sock, err_msg, strlen(err_msg)+1); // (Junrui) FIXME: unify reply (and handle write() errors)
+        // ERROR - unknown command
+        WRITE(cli->sock,
+              ":%s %d %s %s :Unknown command\r\n",
+              server_info->hostname,
+              ERR_UNKNOWNCOMMAND,
+              target,
+              command);
+        return;
     }
 }
 
@@ -210,114 +236,6 @@ int isspecial_(char c)
 }
 
 
-/**
- * Generate a reply to the client
- * Arguments:
- *   n       - number of args exluding |n|
- *   1st arg - server info
- *   2nd arg - client's socket
- *   3rd arg - numerical reply (RPL or ERR)
- *   4th+    - string segments
- */
-void reply(int n, ...)
-{
-    // Variable-length argument list
-    va_list valist;
-    va_start(valist, n); // Initialize valist for |n| number of arguments
-
-    // 1st arg is server info
-    server_info_t* server_info = va_arg(valist, server_info_t*);
-    char snd_buf[RFC_MAX_MSG_LEN+1];
-    char* ptr = snd_buf;
-
-    // Prefix the msg with the originator, i.e. server hostname
-    *ptr++ = ':';
-    ptr = stpcpy(ptr, server_info->hostname); // Msg originates from server
-    *ptr++ = ' ';
-
-    // 2nd arg is the socket number
-    int sock = va_arg(valist, int);
-
-    // 3rd arg is the (integer) numeric reply
-    snprintf(ptr, 4, "%i", va_arg(valist, int)); // int to str
-    ptr += 3;
-
-    // String segments
-    for (int i = 0; i < n - 3; i++)
-    {
-        *ptr++ = ' ';
-        char* seg = va_arg(valist, char*);
-        ptr = stpcpy(ptr, seg);
-    }
-
-    ptr = stpcpy(ptr, "\r\n");
-
-    // Clean memory reserved for valist
-    va_end(valist);
-
-    // Write reply message onto the socket
-    if (write(sock, snd_buf, ptr - snd_buf + 1) < 0)
-    {
-        DEBUG_PERROR("write() failed");
-    }
-}
-
-
-
-/**
- * Echo a command from a client to another client
- * Arguments:
- *   n     - number of args exluding |n|
- *   1     - server info
- *   2     - receiver's socket
- *   3     - originator client's user@host string
- *   4+    - string segments
- */
-void echo_cmd(int n, ...)
-{
-    // Variable-length argument list
-    va_list valist;
-    va_start(valist, n); // Initialize valist for |n| number of arguments
-
-    // Arg 1 is server info
-    server_info_t* server_info = va_arg(valist, server_info_t*);
-    char snd_buf[RFC_MAX_MSG_LEN+1];
-    char* ptr = snd_buf;
-
-    // Arg 2 is the socket number
-    int sock = va_arg(valist, int);
-
-    // Arg 3 is originator's user@host string
-    *ptr++ = ':';
-    char* orig = va_arg(valist, char*);
-    ptr = stpcpy(ptr, orig);
-
-    // String segments
-    for (int i = 0; i < n - 3; i++)
-    {
-        *ptr++ = ' ';
-        char* seg = va_arg(valist, char*);
-        ptr = stpcpy(ptr, seg);
-    }
-
-    ptr = stpcpy(ptr, "\r\n");
-
-    // Clean memory reserved for valist
-    va_end(valist);
-
-    // Write reply message onto the socket
-    if (write(sock, snd_buf, ptr - snd_buf + 1) < 0)
-    {
-        DEBUG_PERROR("write() failed");
-        // (Junrui) FIXME: do we need to remove client here?
-        // (Junrui) FIXME: what about EAGAIN or EWOULDBLOCK?
-        //   The file descriptor is for a socket, is marked O_NONBLOCK, and write would
-        //   block.  The exact error code depends on the protocol, but EWOULDBLOCK is more
-        //   common.
-    }
-}
-
-
 
 /**
  * Check if a nickname is valid
@@ -331,7 +249,7 @@ int is_nickname_valid(char* nick, size_t nick_len)
     {
         char c = nick[i];
         if ( (i == 0 && !isalpha(c)) ||
-             (i > 0  && !(isalpha(c) || isdigit(c) || isspecial_(c))))
+            (i > 0  && !(isalpha(c) || isdigit(c) || isspecial_(c))))
         {
             return FALSE;
         }
@@ -370,7 +288,7 @@ int equivalent_char(char a, char b)
 /**
  * Check if two nicknames |this| and |that| collide.
  */
-int check_colision(size_t this_len, char* this, char* that)
+int check_collision(size_t this_len, char* this, char* that)
 {
     for (int i = 0; i < this_len; i++)
     {
@@ -385,6 +303,8 @@ int check_colision(size_t this_len, char* this, char* that)
         else if ( !equivalent_char(ai, bi) )
             return 0;
     }
+    // Implies two strings have the same length and
+    // equivalent sequence of characters
     return 1;
 }
 
@@ -403,140 +323,167 @@ void cmdNick(CMD_ARGS)
     strncpy(nick_buf, nick, RFC_MAX_NICKNAME);
     size_t nick_len = strlen(nick_buf);
     int nick_valid = is_nickname_valid(nick, nick_len);
-    if (nick_valid)
+    if (!nick_valid)
     {
-        // Check for collision
+        WRITE(cli->sock,
+              ":%s %d %s %s :Erroneus nickname\r\n",
+              server_info->hostname,
+              ERR_ERRONEOUSNICKNAME,
+              *cli->nick? cli->nick: "*",
+              nick_buf);
+    }
+    else /* nick valid */
+    {
+        // Check for nickname collision
         for (Iterator_LinkedList* it = iter(server_info->clients);
              !iter_empty(it);
              it = iter_next(it))
         {
-            client_t* other = (client_t *) iter_yield(it);
+            client_t* other = (client_t *) iter_get(it);
             if (cli == other) continue;
-            if (*other->nick && // Note: we should not check |registered| here
-                check_colision(nick_len, nick_buf, other->nick))
+            if (*other->nick && // Note: we should not check |registered| here,
+                                // because two unregistered clients may still have colliding nicknames
+                check_collision(nick_len, nick_buf, other->nick))
             {
-                reply(5, server_info, cli->sock, ERR_NICKNAMEINUSE, nick_buf, ":Nickname is already in use");
+                WRITE(cli->sock,
+                      ":%s %d %s %s :Nickname is already in use\r\n",
+                      server_info->hostname,
+                      ERR_NICKNAMEINUSE,
+                      *cli->nick? cli->nick: "*",
+                      nick_buf);
                 return;
             }
         }
-        // No collision
+        
+        /* No collision */
+        
+        // Make a copy of old nickname, if any
         char old_nick[RFC_MAX_NICKNAME];
-        if (*cli->nick) // Make a copy of old nickname, if any
+        if (*cli->nick)
             strcpy(old_nick, cli->nick);
-        strcpy(cli->nick, nick_buf); // Edge case: new nick == old nick => no effect & no reply
-
-        // User already has a nickname (updates old nickname) & is registered
-        // => echo NICK to every other registered clients in the same channel
-        if (cli->registered)
+        
+        // Set client's nickname
+        strcpy(cli->nick, nick_buf); // Edge case: new nick same as old nick => No effect
+        
+        // If user already is in a channel
+        // => Echo NICK to everyone else in the same channel
+        if (cli->channel)
         {
             for (Iterator_LinkedList* it = iter(cli->channel->members);
                  !iter_empty(it);
                  it = iter_next(it))
             {
-                client_t* other = (client_t *) iter_yield(it);
+                client_t* other = (client_t *) iter_get(it);
                 if (cli == other) continue;
-                char originator_buf[RFC_MAX_NICKNAME + MAX_USERNAME + MAX_HOSTNAME + 2];
-                sprintf(originator_buf, "%s!%s@%s", old_nick, cli->user, cli->hostname);
-                echo_cmd(5, server_info, other->sock, originator_buf, "NICK", cli->nick);
-                return;
+                WRITE(other->sock,
+                      ":%s!%s@%s NICK %s\r\n",
+                      old_nick,
+                      cli->user,
+                      cli->hostname,
+                      cli->nick);
             }
+            return;
         }
-        // Else, setting nickname for the first time,
-        // or updating nickname for an unregistered user
-        // => Do nothing
+        
+        // Otherwise, the client is not in any channel, so she is either
+        // (a) registered, or (b) not registered, in which case we attempt to
+        // complete the registration if possible
+        if (!cli->registered && *cli->user)
+        {
+            cli->registered = 1;
+            // FIXME: send welcome message
+        }
     }
-    // Invalid nick
-    else
-        reply(4, cli->sock, ERR_ERRONEOUSNICKNAME, nick_buf, ":Erroneus nickname");
 }
 
 
 
 void cmdUser(CMD_ARGS){
-    // checking prefix
-    // ONLY execute the command either when no prefix is provided or when the
-    // provided prefix matches the client's username
-    // otherwise silently ignore the command
-    if (!prefix || !strcmp(prefix, cli->nick)) {
-        // send error message if already registered
-        if (cli->registered) {
-            char err_msg[RFC_MAX_MSG_LEN];
-            sprintf(err_msg, ":%s %d %s :You may not reregister\r\n",
-                    server_info->hostname, ERR_ALREADYREGISTRED, cli->nick);
-            write(cli->sock, err_msg, strlen(err_msg)+1); // (Junrui) FIXME: unify reply (and handle write() errors)
-        }
-
-        // otherwise store user information
-        // if the client is not registered but already has a set of user information (e.g. hasn't run NICK but has run USER),
-        //     we allow the existing user infomation to be overwritten
-        
-        // (Junrui) FIXME: use strncpy (up to some max len defined in sircs.h)
-        strcpy(cli->user, params[0]);
-        strcpy(cli->servername, params[2]);
-        strcpy(cli->realname, params[3]);
-        // FIXME: check if the client becomes registered
-        // fix /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        if (cli->nick[0]) {
-            cli->registered = 1;
-        }
+    // ERROR - already registered
+    if (cli->registered)
+    {
+        WRITE(cli->sock,
+              ":%s %d %s :You may not reregister\r\n",
+              server_info->hostname,
+              ERR_ALREADYREGISTRED,
+              cli->nick);
     }
+    
+    // Update user information
+    strncpy(cli->user, params[0], MAX_USERNAME-1);
+    strncpy(cli->servername, params[2], MAX_SERVERNAME-1);
+    strncpy(cli->realname, params[3], MAX_REALNAME-1);
+    // Edge case -
+    // If the client is not registered but already has already issued USER, i.e.,
+    // she hasn't run NICK but has run USER, then existing user infomation is
+    // silently overwritten
 
-    // prefix mismatch is not counted as error
+    // Register the client if possible
+    if (!cli->registered && *cli->nick)
+    {
+        cli->registered = 1;
+        // FIXME: send welcome message
+    }
 }
 
 
 
 void cmdQuit(CMD_ARGS)
 {
-    // checking prefix
-    // ONLY execute the command either when no prefix is provided or when the
-    // provided prefix matches the client's username
-    // otherwise silently ignore the command
-    if (!prefix || !strcmp(prefix, cli->nick)) {
-        // close the connection
-        close(cli->sock);
-        
-        // Remove client from the channel member list (if any)
-        if (cli->channel)
-        {
-            char quit_msg[RFC_MAX_MSG_LEN];
-            // echo quit message to all users on the same channel
-            // if given quit message
-            if (!nparams)
-            {
-                sprintf(quit_msg, ":%s!%s@%s QUIT :%s",
-                        cli->nick, cli->user, cli->hostname, params[0]);
-            }
-            else
-            {
-                sprintf(quit_msg, ":%s!%s@%s QUIT :Connection closed",
-                        cli->nick, cli->user, cli->hostname);
-            }
-            for (Iterator_LinkedList* it = iter(cli->channel->members);
-                 !iter_empty(it);
-                 it = iter_next(it))
-            {
-                client_t* other = (client_t *) iter_yield(it);
-                if (cli == other)
-                    iter_drop(it);
-                else
-                    write(other->sock, quit_msg, strlen(quit_msg)+1); // (Junrui) FIXME: unify reply (and handle write() errors)
-            }
-        }
-        // Remove client from the server's client list
-        // (Junrui) TESTME
-        // (Junrui) FIXME: This iterates over the whole list and defeats the purpose?
-        for (Iterator_LinkedList* it = iter(server_info->clients);
+    // Close the connection
+    close(cli->sock);
+    
+    // Remove client from the server's client list
+    for (Iterator_LinkedList* it = iter(server_info->clients);
+         !iter_empty(it);
+         it = iter_next(it)) // (Junrui) FIXME: This iterates over the whole list and defeats the purpose?
+    {
+        client_t* other = (client_t *) iter_get(it);
+        if (cli == other)
+            iter_drop(it);
+    }
+    
+    // If the client has joined a channel, then we need to
+    //   1. remove her from the member list
+    //   2. echo QUIT to other members
+    if (cli->channel)
+    {
+        // Loop through members from the client's channel
+        for (Iterator_LinkedList* it = iter(cli->channel->members);
              !iter_empty(it);
              it = iter_next(it))
         {
-            client_t* other = (client_t *) iter_yield(it);
+            client_t* other = (client_t *) iter_get(it);
+            
+            // Client herself => Remove client from the channel member list
             if (cli == other)
                 iter_drop(it);
+            
+            // Someone else => Echo quit message to other members
+            else
+            {
+                // Client did not specify the farewell message => Use default
+                if (!nparams)
+                {
+                    WRITE(other->sock,
+                          ":%s!%s@%s QUIT :Connection closed",
+                          cli->nick,
+                          cli->user,
+                          cli->hostname);
+                }
+                // Client has specified farewell message
+                else
+                {
+                    WRITE(cli->sock,
+                          ":%s!%s@%s QUIT :%s",
+                          cli->nick,
+                          cli->user,
+                          cli->hostname,
+                          params[0]);
+                }
+            }
         }
     }
-    // prefix mismatch is not counted as error
-
 }
 
 
