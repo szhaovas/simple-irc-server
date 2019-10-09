@@ -37,7 +37,7 @@ void init_list(LinkedList* list);
 
 Node* add_item(LinkedList* list, void* data);
 
-void drop_node(LinkedList* list, Node* node);
+void* drop_node(LinkedList* list, Node* node);
 
 char* list_to_str(LinkedList* list, char* buf);
 
@@ -50,11 +50,11 @@ Iterator_LinkedList* iter_next(Iterator_LinkedList* it);
 Node* iter_add(Iterator_LinkedList* it, void* data);
 
 /* Drop the current item */
-void iter_drop(Iterator_LinkedList* it);
+void* iter_drop(Iterator_LinkedList* it);
 
-void iter_drop_node(Iterator_LinkedList* it, Node* node);
+void* iter_drop_node(Iterator_LinkedList* it, Node* node);
 
-Node* iter_yield(Iterator_LinkedList* it);
+void* iter_yield(Iterator_LinkedList* it);
 
 
 #endif /* _LINKED_LIST_H_ */

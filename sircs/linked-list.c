@@ -63,8 +63,9 @@ Node* add_item(LinkedList* list, void* data)
 /**
  * Drop a node from a linked list.
  */
-void drop_node(LinkedList* list, Node* node)
+void* drop_node(LinkedList* list, Node* node)
 {
+    void* data = node->data;
     // Fix link
     // |node| wasn't head
     if (node->prev != NULL)
@@ -81,6 +82,7 @@ void drop_node(LinkedList* list, Node* node)
     // Free memory
     free(node);
     list->size -= 1;
+    return data;
 }
 
 
@@ -163,11 +165,11 @@ Node* iter_add(Iterator_LinkedList* it, void* data)
 /**
  * Drop the current item from an iterator.
  */
-void iter_drop(Iterator_LinkedList* it)
+void* iter_drop(Iterator_LinkedList* it)
 {
     Node* to_be_dropped = it->curr;
     iter_yield(it);
-    drop_node(it->list, to_be_dropped);
+    return drop_node(it->list, to_be_dropped);
 }
 
 
@@ -175,12 +177,12 @@ void iter_drop(Iterator_LinkedList* it)
 /**
  * Drop a node item from the list referred to by the iterator.
  */
-void iter_drop_node(Iterator_LinkedList* it, Node* node)
+void* iter_drop_node(Iterator_LinkedList* it, Node* node)
 {
     if (node == it->curr)
-        iter_drop(it);
+        return iter_drop(it);
     else
-        drop_node(it->list, node);
+        return drop_node(it->list, node);
 }
 
 
@@ -190,11 +192,11 @@ void iter_drop_node(Iterator_LinkedList* it, Node* node)
  * Note: this function will increment the pointer, so the same node
  * will never be yielded twice.
  */
-Node* iter_yield(Iterator_LinkedList* it)
+void* iter_yield(Iterator_LinkedList* it)
 {
     assert(!it->yielded);
     it->yielded = TRUE;
     Node* curr = it->curr;
     it->curr = it->curr->next;
-    return curr;
+    return curr->data;
 }

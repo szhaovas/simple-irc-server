@@ -20,7 +20,7 @@
  * e.g., void cmd_nick(your_client_thingy *c, char *prefix, ...)
  * or however you set it up.
  */
-#define CMD_ARGS client* clients[], int client_no, char *prefix, char **params, int nparams
+#define CMD_ARGS server_info_t* server_info, client_t* cli, char *prefix, char **params, int nparams
 typedef int (*cmd_handler_t)(CMD_ARGS);
 #define COMMAND(cmd_name) int cmd_name(CMD_ARGS)
 
@@ -77,9 +77,8 @@ int isspecial_(char c);
  * it the result of calling read()).
  * Strip the trailing newline off before calling this function.
  */
-void handleLine(char *line, client* clients[], int client_no)
+void handleLine(char* line, server_info_t* server_info, client_t* cli)
 {
-    client *cli = clients[client_no];
     // Empty messages are silently iginored (as per RFC)
     if (*line == '\0') return;
 
@@ -98,9 +97,7 @@ void handleLine(char *line, client* clients[], int client_no)
     if (!command || *command == '\0'){
         /* Send an unknown command error! */
         char err_msg[RFC_MAX_MSG_LEN];
-        char server_hostname[MAX_HOSTNAME];
-        get_server_hostname(server_hostname);
-        sprintf(err_msg, ":%s %d %s %s :Unknown command\r\n", server_hostname, ERR_NEEDMOREPARAMS, cli->nick, command);
+        sprintf(err_msg, ":%s %d %s %s :Unknown command\r\n", server_info->hostname, ERR_NEEDMOREPARAMS, cli->nick, command);
         write(cli->sock, err_msg, strlen(err_msg)+1);
         return;
     }
@@ -111,9 +108,7 @@ void handleLine(char *line, client* clients[], int client_no)
 
     if (*command == '\0'){
         char err_msg[RFC_MAX_MSG_LEN];
-        char server_hostname[MAX_HOSTNAME];
-        get_server_hostname(server_hostname);
-        sprintf(err_msg, ":%s %d %s %s :Unknown command\r\n", server_hostname, ERR_NEEDMOREPARAMS, cli->nick, command);
+        sprintf(err_msg, ":%s %d %s %s :Unknown command\r\n", server_info->hostname, ERR_NEEDMOREPARAMS, cli->nick, command);
         write(cli->sock, err_msg, strlen(err_msg)+1);
         /* Send an unknown command error! */
         return;
@@ -172,9 +167,7 @@ void handleLine(char *line, client* clients[], int client_no)
         if (!strcasecmp(cmds[i].cmd, command)){
             if (cmds[i].needreg && !cli->registered){
                 char err_msg[RFC_MAX_MSG_LEN];
-                char server_hostname[MAX_HOSTNAME];
-                get_server_hostname(server_hostname);
-                sprintf(err_msg, ":%s %d %s :You have not registered\r\n", server_hostname, ERR_NOTREGISTERED, cli->nick);
+                sprintf(err_msg, ":%s %d %s :You have not registered\r\n", server_info->hostname, ERR_NOTREGISTERED, cli->nick);
                 write(cli->sock, err_msg, strlen(err_msg)+1);
                 /* ERROR - the client is not registered and they need
                  * to be in order to use this command! */
@@ -182,16 +175,14 @@ void handleLine(char *line, client* clients[], int client_no)
                 /* ERROR - the client didn't specify enough parameters
                  * for this command! */
                  char err_msg[RFC_MAX_MSG_LEN];
-                 char server_hostname[MAX_HOSTNAME];
-                 get_server_hostname(server_hostname);
-                 sprintf(err_msg, ":%s %d %s %s :Not enough parameters\r\n", server_hostname, ERR_NEEDMOREPARAMS, cli->nick, cmds[i].cmd);
+                 sprintf(err_msg, ":%s %d %s %s :Not enough parameters\r\n", server_info->hostname, ERR_NEEDMOREPARAMS, cli->nick, cmds[i].cmd);
                  write(cli->sock, err_msg, strlen(err_msg)+1);
             } else {
                 /* Here's the call to the cmd_foo handler... modify
                  * to send it the right params per your program
                  * structure. */
                 // FIXME: check prefix match here
-                (*cmds[i].handler)(clients, client_no, prefix, params, nparams);
+                (*cmds[i].handler)(server_info, cli, prefix, params, nparams);
             }
             break;
         }
@@ -200,9 +191,7 @@ void handleLine(char *line, client* clients[], int client_no)
     if (i == NELMS(cmds)){
         /* ERROR - unknown command! */
         char err_msg[RFC_MAX_MSG_LEN];
-        char server_hostname[MAX_HOSTNAME];
-        get_server_hostname(server_hostname);
-        sprintf(err_msg, ":%s %d %s %s :Unknown command\r\n", server_hostname, ERR_NEEDMOREPARAMS, cli->nick, cmds[i].cmd);
+        sprintf(err_msg, ":%s %d %s %s :Unknown command\r\n", server_info->hostname, ERR_NEEDMOREPARAMS, cli->nick, cmds[i].cmd);
         write(cli->sock, err_msg, strlen(err_msg)+1);
     }
 }
@@ -225,9 +214,10 @@ int isspecial_(char c)
  * Generate a reply to the client
  * Arguments:
  *   n       - number of args exluding |n|
- *   1st arg - client's socket
- *   2nd arg - numerical reply (RPL or ERR)
- *   3+      - string segments
+ *   1st arg - server info
+ *   2nd arg - client's socket
+ *   3rd arg - numerical reply (RPL or ERR)
+ *   4th+    - string segments
  */
 int reply(int n, ...)
 {
@@ -235,24 +225,25 @@ int reply(int n, ...)
     va_list valist;
     va_start(valist, n); // Initialize valist for |n| number of arguments
 
-    // Get send buffer
-    char snd_buf[RFC_MAX_MSG_LEN];
+    // 1st arg is server info
+    server_info_t* server_info = va_arg(valist, server_info_t*);
+    char snd_buf[RFC_MAX_MSG_LEN+1];
     char* ptr = snd_buf;
 
     // Prefix the msg with the originator, i.e. server hostname
     *ptr++ = ':';
-    ptr = get_server_hostname(ptr); // Msg originates from server
+    ptr = stpcpy(ptr, server_info->hostname); // Msg originates from server
     *ptr++ = ' ';
 
-    // First arg is the socket number
+    // 2nd arg is the socket number
     int sock = va_arg(valist, int);
 
-    // Second arg is always the (integer) numeric reply
+    // 3rd arg is the (integer) numeric reply
     snprintf(ptr, 4, "%i", va_arg(valist, int)); // int to str
     ptr += 3;
 
     // String segments
-    for (int i = 0; i < n - 2; i++)
+    for (int i = 0; i < n - 3; i++)
     {
         *ptr++ = ' ';
         char* seg = va_arg(valist, char*);
@@ -279,10 +270,11 @@ int reply(int n, ...)
 /**
  * Echo a command from a client to another client
  * Arguments:
- *   n       - number of args exluding |n|
- *   1st arg - receiver's socket
- *   2nd arg - originator client's user@host string
- *   3+      - string segments
+ *   n     - number of args exluding |n|
+ *   1     - server info
+ *   2     - receiver's socket
+ *   3     - originator client's user@host string
+ *   4+    - string segments
  */
 int echo_cmd(int n, ...)
 {
@@ -290,20 +282,21 @@ int echo_cmd(int n, ...)
     va_list valist;
     va_start(valist, n); // Initialize valist for |n| number of arguments
 
-    // Get send buffer
-    char snd_buf[RFC_MAX_MSG_LEN];
+    // Arg 1 is server info
+    server_info_t* server_info = va_arg(valist, server_info_t*);
+    char snd_buf[RFC_MAX_MSG_LEN+1];
     char* ptr = snd_buf;
 
-    // 1st arg is the socket number
+    // Arg 2 is the socket number
     int sock = va_arg(valist, int);
 
-    // 2nd arg is originator's user@host string
+    // Arg 3 is originator's user@host string
     *ptr++ = ':';
     char* orig = va_arg(valist, char*);
     ptr = stpcpy(ptr, orig);
 
     // String segments
-    for (int i = 0; i < n - 2; i++)
+    for (int i = 0; i < n - 3; i++)
     {
         *ptr++ = ' ';
         char* seg = va_arg(valist, char*);
@@ -410,7 +403,6 @@ int check_colision(size_t this_len, char* this, char* that)
  */
 int cmdNick(CMD_ARGS)
 {
-    client *cli = clients[client_no];
     char* nick = params[0];
     char nick_buf[RFC_MAX_NICKNAME+1];
     nick_buf[RFC_MAX_NICKNAME] = '\0';
@@ -420,15 +412,17 @@ int cmdNick(CMD_ARGS)
     if (nick_valid)
     {
         // Check for collision
-        for (int i = 0; i < MAX_CLIENTS; i++)
+        for (Iterator_LinkedList* it = iter(server_info->clients);
+             !iter_empty(it);
+             it = iter_next(it))
         {
-            if (i == client_no) continue;
-            client* other = clients[i];
+            client_t* other = (client_t *) iter_yield(it);
+            if (cli == other) continue;
             if (other &&
                 *other->nick && // Note: we should not check |registered| here
                 check_colision(nick_len, nick_buf, other->nick))
             {
-                return reply(4, cli->sock, ERR_NICKNAMEINUSE, nick_buf, ":Nickname is already in use");
+                return reply(5, server_info, cli->sock, ERR_NICKNAMEINUSE, nick_buf, ":Nickname is already in use");
             }
         }
         // No collision
@@ -438,16 +432,17 @@ int cmdNick(CMD_ARGS)
         // => echo NICK to every other registered clients in the same channel
         if (cli->registered)
         {
-            for (int i = 0; i < MAX_CLIENTS; i++)
+            for (Iterator_LinkedList* it = iter(server_info->clients);
+                 !iter_empty(it);
+                 it = iter_next(it))
             {
-                client* other = clients[i];
-                if (i == client_no) continue;
-                if (other && other->registered &&
-                    !strncmp(other->channel, cli->channel, RFC_MAX_NICKNAME))
+                client_t* other = (client_t *) iter_yield(it);
+                if (cli == other) continue;
+                if (other && other->registered && other->channel == cli->channel)
                 {
                     char originator_buf[RFC_MAX_NICKNAME + MAX_USERNAME + MAX_HOSTNAME + 2];
                     sprintf(originator_buf, "%s!%s@%s", cli->nick, cli->user, cli->hostname);
-                    return echo_cmd(4, other->sock, originator_buf, "NICK", cli->nick);
+                    return echo_cmd(5, server_info, other->sock, originator_buf, "NICK", cli->nick);
                 }
             }
         }
@@ -464,8 +459,6 @@ int cmdNick(CMD_ARGS)
 }
 
 int cmdUser(CMD_ARGS){
-    client *cli = clients[client_no];
-
     // checking prefix
     // ONLY execute the command either when no prefix is provided or when the
     // provided prefix matches the client's username
@@ -474,9 +467,10 @@ int cmdUser(CMD_ARGS){
         // send error message if already registered
         if (cli->registered) {
             char err_msg[RFC_MAX_MSG_LEN];
-            char server_hostname[MAX_HOSTNAME];
-            get_server_hostname(server_hostname);
-            sprintf(err_msg, ":%s %d %s :You may not reregister\r\n", server_hostname, ERR_ALREADYREGISTRED, cli->nick);
+            sprintf(err_msg, ":%s %d %s :You may not reregister\r\n",
+                    server_info->hostname,
+                    ERR_ALREADYREGISTRED,
+                    cli->nick);
             return write(cli->sock, err_msg, strlen(err_msg)+1);
         }
 
@@ -499,7 +493,6 @@ int cmdUser(CMD_ARGS){
 
 int cmdQuit(CMD_ARGS)
 {
-    client *cli = clients[client_no];
 
     // checking prefix
     // ONLY execute the command either when no prefix is provided or when the
@@ -513,11 +506,13 @@ int cmdQuit(CMD_ARGS)
         // echo quit message to all users on the same channel
         // if given quit message
         if (!nparams) {
-            for (int i = 0; i < MAX_CLIENTS; i++) {
-                client* other = clients[i];
-                if (i == client_no) continue;
-                if (other && other->registered &&
-                    !strncmp(other->channel, cli->channel, RFC_MAX_NICKNAME))
+            for (Iterator_LinkedList* it = iter(server_info->clients);
+                 !iter_empty(it);
+                 it = iter_next(it))
+            {
+                client_t* other = (client_t *) iter_yield(it);
+                if (cli == other) continue;
+                if (other && other->registered && other->channel == cli->channel)
                 {
                     sprintf(quit_msg, ":%s!%s@%s QUIT :%s", cli->nick, cli->user, cli->hostname, params[0]);
                     write(other->sock, quit_msg, strlen(quit_msg)+1);
@@ -526,9 +521,12 @@ int cmdQuit(CMD_ARGS)
         }
         // else default quit message
         else {
-            for (int i = 0; i < MAX_CLIENTS; i++) {
-                client* other = clients[i];
-                if (i == client_no) continue;
+            for (Iterator_LinkedList* it = iter(server_info->clients);
+                 !iter_empty(it);
+                 it = iter_next(it))
+            {
+                client_t* other = (client_t *) iter_yield(it);
+                if (cli == other) continue;
                 if (other && other->registered &&
                     !strncmp(other->channel, cli->channel, RFC_MAX_NICKNAME))
                 {

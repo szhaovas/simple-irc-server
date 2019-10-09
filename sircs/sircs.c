@@ -16,15 +16,13 @@
 #include "debug.h"
 #include "irc-proto.h"
 
-#define NELMS(array) (sizeof(array) / sizeof(array[0]))
 
 void usage() {
     eprintf("sircs [-h] [-D debugLevel] <port>\n");
     exit(-1);
 }
 
-char srv_hostname[MAX_HOSTNAME];
-char snd_buf[RFC_MAX_MSG_LEN]; // server messages must conform to RFC
+
 
 int main(int argc, char *argv[] ){
     DPRINTF(DEBUG_INIT, "Hello\n");
@@ -68,6 +66,8 @@ int main(int argc, char *argv[] ){
     
     int __rc; // for return codes
     struct sockaddr_in srv_addr;
+    server_info_t server_info;
+    memset(&server_info, 0, sizeof(server_info));
     
     // Create listening socket
     int listenfd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -82,7 +82,6 @@ int main(int argc, char *argv[] ){
     __rc = set_non_blocking(listenfd);
     exit_on_error(__rc, "");
     
-    
     // Initialize sockaddr
     memset(&srv_addr, '\0', sizeof(srv_addr));
     srv_addr.sin_family = AF_INET;
@@ -96,38 +95,45 @@ int main(int argc, char *argv[] ){
     // Listen
     __rc = listen(listenfd, 1);
     exit_on_error(__rc, "listen() failed");
-
     
     // Set up file descriptors pool
     fd_set fds;
-    
-    // Array to keep track of connections that are alive
-    client *clients[MAX_CLIENTS];
-    int num_clients = 0;
-    memset(&clients, 0, sizeof(clients));
     
     // Time-out
     struct timeval timeout;
     timeout.tv_sec = 1;
     timeout.tv_usec = 0;
     
-    // Allocate send buffer
-    memset(snd_buf, '\0', RFC_MAX_MSG_LEN);
-    snd_buf[0] = 'h';
+    
+    /* Initialize server_info struct */
     
     // Get server hostname
-    srv_hostname[MAX_HOSTNAME-1] = '\0';
-    gethostname(srv_hostname, sizeof(srv_hostname));
+    size_t hostname_len = sizeof(server_info.hostname);
+    server_info.hostname[hostname_len-1] = '\0';
+    gethostname(server_info.hostname, hostname_len-1);
+    
+    // Client list
+    LinkedList* clients = malloc(sizeof(LinkedList));
+    init_list(clients);
+    server_info.clients = clients;
+    
+    // Channel list
+    LinkedList* channels = malloc(sizeof(LinkedList));
+    init_list(channels);
+    server_info.channels = channels;
+    
+    // Send buffer
+    // (Nothing to do)
     
     DPRINTF(DEBUG_INIT, "Simple IRC server listening on %s:%d, fd=%d\n",
-            srv_hostname,
+            server_info.hostname,
             port,
             listenfd);
     
     // Start main server loop
     while (TRUE)
     {
-        int highfd = build_fd_set(&fds, listenfd, clients);
+        int highfd = build_fd_set(&fds, listenfd, server_info.clients);
         int ready = select(highfd + 1, &fds, (fd_set *) 0, (fd_set *) 0, &timeout);
         exit_on_error(ready, "select() failed");
         
@@ -141,26 +147,27 @@ int main(int argc, char *argv[] ){
             // Accept a new connection
             if (FD_ISSET(listenfd, &fds))
             {
-                handle_new_connection(listenfd, clients, &num_clients);
+                handle_new_connection(listenfd, server_info.clients);
             }
             // Check activities from connected sockets
-            for (int i = 0; i < MAX_CLIENTS; i++)
+            for (Iterator_LinkedList* it = iter(server_info.clients);
+                 !iter_empty(it);
+                 it = iter_next(it))
             {
-                if (clients[i] != NULL)
+                client_t* cli = (client_t *) iter_yield(it);
                 {
-                    int sock = clients[i]->sock;
+                    int sock = cli->sock;
                     if (FD_ISSET(sock, &fds))
                     {
                         DPRINTF(DEBUG_CLIENTS, "Active fd=%i\n", sock);
-                        __rc = handle_data(clients, i, snd_buf);
+                        __rc = handle_data(&server_info, cli);
                         // If something went wrong,
                         // close this connection and remove associated state info
                         if (__rc < 0)
                         {
                             DPRINTF(DEBUG_CLIENTS, "Client fd=%i closed the connection.\n", sock);
-                            free(clients[i]);
-                            clients[i] = NULL;
-                            num_clients -= 1;
+                            iter_drop(it);
+                            // FIXME: remove channel if necessary
                         }
                     }
                 }
@@ -173,34 +180,25 @@ int main(int argc, char *argv[] ){
 }
 
 
-char* get_server_hostname(char* buf)
-{
-    return stpcpy(buf, srv_hostname);
-}
-
-
 
 /* Build fd_set in |fds| given the listening socket |listenfd| and
  * client sockets |clients| array.
  */
-int build_fd_set(fd_set *fds, int listenfd, client *clients[])
+int build_fd_set(fd_set *fds, int listenfd, LinkedList* clients)
 {
     int highfd = listenfd;
     FD_ZERO(fds);
     FD_SET(listenfd, fds);
     // update highfd
-    for (int i = 0; i < MAX_CLIENTS; i++)
+    for (Iterator_LinkedList* it = iter(clients);
+         !iter_empty(it);
+         it = iter_next(it))
     {
-        client *cli = clients[i];
-        if (cli != NULL)
-        {
-            int fd = cli->sock;
-            FD_SET(fd, fds);
-            if (fd > highfd)
-            {
-                highfd = fd;
-            }
-        }
+        client_t* cli = (client_t *) iter_yield(it);
+        int fd = cli->sock;
+        FD_SET(fd, fds); // Register this socket
+        if (fd > highfd) // Update |highfd| if necessary
+            highfd = fd;
     }
     return highfd;
 }
@@ -241,8 +239,7 @@ int set_non_blocking(int fd)
  *   - cannot retrieve client's hostname using getnameinfo().
  */
 int handle_new_connection(int listenfd,
-                          client *clients[],
-                          int *num_clients)
+                          LinkedList* clients)
 {
     // Accept any new connection
     struct sockaddr_in cli_addr;
@@ -254,7 +251,7 @@ int handle_new_connection(int listenfd,
         perror("accept() failed");
         return -1;
     }
-    if (*num_clients == MAX_CLIENTS)
+    if (clients->size == MAX_CLIENTS)
     {
         DPRINTF(DEBUG_SOCKETS, "No room for new connections\n");
         close(sock);
@@ -262,7 +259,7 @@ int handle_new_connection(int listenfd,
     }
     
     // Ready to record client information
-    client *cli = (client *) malloc(sizeof(client));
+    client_t* cli = (client_t *) malloc(sizeof(client_t));
     memset(cli, 0, sizeof(*cli));
     
     
@@ -287,7 +284,6 @@ int handle_new_connection(int listenfd,
     }
     
     // Initialize hostname (always NUL-terminated), and truncate if necessary
-    // TESTME
     strncpy(cli->hostname, host_buf, MIN( strlen(host_buf),
                                           MAX_HOSTNAME-1 ));  // -1 for the last '\0'
     
@@ -299,16 +295,7 @@ int handle_new_connection(int listenfd,
             cli->hostname,
             cli->sock);
     
-    // Look for an empty slot to hold this client's record
-    for (int i = 0; i < MAX_CLIENTS; i++)
-    {
-        if (clients[i] == NULL)
-        {
-            clients[i] = cli;
-            *num_clients += 1;
-            break;
-        }
-    }
+    add_item(clients, cli);
     return 0;
 }
 
@@ -317,9 +304,8 @@ int handle_new_connection(int listenfd,
 
 /* Handle new input data from the client.
  */
-int handle_data(client* clients[], int client_no, char* snd_buf)
+int handle_data(server_info_t* server_info, client_t* cli)
 {
-    client *cli = clients[client_no];
     // Make sure there's still space to read anything
     assert(cli->inbuf_size < MAX_MSG_LEN);
     // Compute remaning space
@@ -372,7 +358,7 @@ int handle_data(client* clients[], int client_no, char* snd_buf)
         print_hex(DEBUG_INPUT, msg, MAX_MSG_LEN);
         DPRINTF(DEBUG_INPUT, "\n");
         // Replace end
-        handleLine(msg, clients, client_no);
+        handleLine(msg, server_info, cli);
         
         msg = end + 1;
     }
@@ -388,10 +374,10 @@ int handle_data(client* clients[], int client_no, char* snd_buf)
     // Move this segment to the beginning of the buffer
     else
     {
-        strcpy(snd_buf, msg); // use send buffer as intermediate storage
+        strcpy(server_info->snd_buf, msg); // use send buffer as intermediate storage
         memset(&(cli->inbuf), '\0', MAX_MSG_LEN);
-        strcpy(cli->inbuf, snd_buf);
-        memset(snd_buf, '\0', MAX_MSG_LEN);
+        strcpy(cli->inbuf, server_info->snd_buf);
+        memset(server_info->snd_buf, '\0', MAX_MSG_LEN);
         cli->inbuf_size = (unsigned) strlen(cli->inbuf);
         
         DPRINTF(DEBUG_INPUT, "Incomplete msg: %s\n", cli->inbuf);
