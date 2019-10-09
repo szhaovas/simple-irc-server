@@ -21,8 +21,8 @@
  * or however you set it up.
  */
 #define CMD_ARGS server_info_t* server_info, client_t* cli, char *prefix, char **params, int nparams
-typedef int (*cmd_handler_t)(CMD_ARGS);
-#define COMMAND(cmd_name) int cmd_name(CMD_ARGS)
+typedef void (*cmd_handler_t)(CMD_ARGS);
+#define COMMAND(cmd_name) void cmd_name(CMD_ARGS)
 
 struct dispatch {
     char cmd[MAX_COMMAND];
@@ -219,7 +219,7 @@ int isspecial_(char c)
  *   3rd arg - numerical reply (RPL or ERR)
  *   4th+    - string segments
  */
-int reply(int n, ...)
+void reply(int n, ...)
 {
     // Variable-length argument list
     va_list valist;
@@ -259,10 +259,7 @@ int reply(int n, ...)
     if (write(sock, snd_buf, ptr - snd_buf + 1) < 0)
     {
         DEBUG_PERROR("write() failed");
-        return -1;
     }
-
-    return 0;
 }
 
 
@@ -276,7 +273,7 @@ int reply(int n, ...)
  *   3     - originator client's user@host string
  *   4+    - string segments
  */
-int echo_cmd(int n, ...)
+void echo_cmd(int n, ...)
 {
     // Variable-length argument list
     va_list valist;
@@ -317,10 +314,7 @@ int echo_cmd(int n, ...)
         //   The file descriptor is for a socket, is marked O_NONBLOCK, and write would
         //   block.  The exact error code depends on the protocol, but EWOULDBLOCK is more
         //   common.
-        return -1;
     }
-
-    return 0;
 }
 
 
@@ -397,11 +391,11 @@ int check_colision(size_t this_len, char* this, char* that)
 
 
 /* Command handlers */
-/* MODIFY to take the arguments you specified above! */
+
 /**
  * Command NICK
  */
-int cmdNick(CMD_ARGS)
+void cmdNick(CMD_ARGS)
 {
     char* nick = params[0];
     char nick_buf[RFC_MAX_NICKNAME+1];
@@ -421,7 +415,8 @@ int cmdNick(CMD_ARGS)
             if (*other->nick && // Note: we should not check |registered| here
                 check_colision(nick_len, nick_buf, other->nick))
             {
-                return reply(5, server_info, cli->sock, ERR_NICKNAMEINUSE, nick_buf, ":Nickname is already in use");
+                reply(5, server_info, cli->sock, ERR_NICKNAMEINUSE, nick_buf, ":Nickname is already in use");
+                return;
             }
         }
         // No collision
@@ -442,7 +437,8 @@ int cmdNick(CMD_ARGS)
                 if (cli == other) continue;
                 char originator_buf[RFC_MAX_NICKNAME + MAX_USERNAME + MAX_HOSTNAME + 2];
                 sprintf(originator_buf, "%s!%s@%s", old_nick, cli->user, cli->hostname);
-                return echo_cmd(5, server_info, other->sock, originator_buf, "NICK", cli->nick);
+                echo_cmd(5, server_info, other->sock, originator_buf, "NICK", cli->nick);
+                return;
             }
         }
         // Else, setting nickname for the first time,
@@ -451,15 +447,12 @@ int cmdNick(CMD_ARGS)
     }
     // Invalid nick
     else
-    {
-        return reply(4, cli->sock, ERR_ERRONEOUSNICKNAME, nick_buf, ":Erroneus nickname");
-    }
-    return 0; // No reply
+        reply(4, cli->sock, ERR_ERRONEOUSNICKNAME, nick_buf, ":Erroneus nickname");
 }
 
 
 
-int cmdUser(CMD_ARGS){
+void cmdUser(CMD_ARGS){
     // checking prefix
     // ONLY execute the command either when no prefix is provided or when the
     // provided prefix matches the client's username
@@ -470,7 +463,7 @@ int cmdUser(CMD_ARGS){
             char err_msg[RFC_MAX_MSG_LEN];
             sprintf(err_msg, ":%s %d %s :You may not reregister\r\n",
                     server_info->hostname, ERR_ALREADYREGISTRED, cli->nick);
-            return write(cli->sock, err_msg, strlen(err_msg)+1); // (Junrui) FIXME: unify reply (and handle write() errors)
+            write(cli->sock, err_msg, strlen(err_msg)+1); // (Junrui) FIXME: unify reply (and handle write() errors)
         }
 
         // otherwise store user information
@@ -489,12 +482,11 @@ int cmdUser(CMD_ARGS){
     }
 
     // prefix mismatch is not counted as error
-    return 0;
 }
 
 
 
-int cmdQuit(CMD_ARGS)
+void cmdQuit(CMD_ARGS)
 {
     // checking prefix
     // ONLY execute the command either when no prefix is provided or when the
@@ -544,37 +536,37 @@ int cmdQuit(CMD_ARGS)
         }
     }
     // prefix mismatch is not counted as error
-    return 0;
+
 }
 
 
 
-int cmdJoin(CMD_ARGS)
+void cmdJoin(CMD_ARGS)
 {
     /* do something */
-    return 0;
+    
 }
 
-int cmdPart(CMD_ARGS)
+void cmdPart(CMD_ARGS)
 {
     /* do something */
-    return 0;
+    
 }
 
-int cmdList(CMD_ARGS)
+void cmdList(CMD_ARGS)
 {
     /* do something */
-    return 0;
+    
 }
 
-int cmdPmsg(CMD_ARGS)
+void cmdPmsg(CMD_ARGS)
 {
     /* do something */
-    return 0;
+    
 }
 
-int cmdWho(CMD_ARGS)
+void cmdWho(CMD_ARGS)
 {
     /* do something */
-    return 0;
+    
 }

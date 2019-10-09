@@ -21,7 +21,6 @@ typedef struct __client_struct client_t;
 typedef struct __channel_struct channel_t;
 
 typedef struct {
-//    int listenfd;
     char hostname[MAX_HOSTNAME];
     LinkedList* clients;
     LinkedList* channels;

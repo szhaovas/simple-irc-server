@@ -12,7 +12,6 @@ struct _node_struct {
 typedef struct _node_struct Node;
 
 
-
 /* Linked List */
 typedef struct {
     Node* head;
@@ -28,7 +27,6 @@ typedef struct {
     Node* curr;
     int yielded;
 } Iterator_LinkedList;
-
 
 
 /* Function declarations */
