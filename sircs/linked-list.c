@@ -163,13 +163,6 @@ void iter_clean(Iterator_LinkedList* it)
 
 /**
  * Get the next iterator.
- * To be used only in a for loop:
-        for (Iterator_LinkedList* it = iter(&l);
-            !iter_empty(it);
-            it = iter_next(it))
-        {
-            // iter_get, iter_add, iter_drop, etc.
-        }
  */
 Iterator_LinkedList* iter_next(Iterator_LinkedList* it)
 {

@@ -21,16 +21,6 @@ typedef struct {
 } LinkedList;
 
 
-/* Linked List Iterator */
-typedef struct {
-    LinkedList* list;
-    Node* curr;
-    int incremented;
-} Iterator_LinkedList;
-
-
-/* Function declarations */
-
 void init_list(LinkedList* list);
 
 Node* add_item(LinkedList* list, void* data);
@@ -40,6 +30,32 @@ void drop_item(LinkedList* list, void* data);
 void* drop_node(LinkedList* list, Node* node);
 
 char* list_to_str(LinkedList* list, char* buf);
+
+
+/* L */
+
+typedef struct {
+    LinkedList* list;
+    Node* curr;
+    int incremented;
+} Iterator_LinkedList;
+
+/*  */
+/**
+ * Linked List Iterator.
+ *
+ * Example Usage
+ 
+     LinkedList* list;
+     // Adding items to |list| ...
+     Iterator_LinkedList* it;
+     for (it = iter(list); !iter_empty(it); it = iter_next(it))
+     {
+        // iter_get, iter_add, iter_drop, etc.
+     }
+     iter_clean(it);
+ 
+*/
 
 Iterator_LinkedList* iter(LinkedList* list);
 
