@@ -365,7 +365,6 @@ void motd(int sock, char* hostname)
 }
 
 
-
 /**
  * Remove an empty channel.
  */
@@ -375,6 +374,50 @@ void remove_empty_channel(server_info_t* server_info, channel_t* ch)
     drop_item(server_info->channels, ch);
     free(ch->members);
     free(ch);
+}
+
+
+/**
+ * Build a multi-segment message that may exceed size limit. If so, the message
+ * is split into multiple messages sharing a common prefix string, and they are
+ * sent individually.
+ *
+ * The message must look like:
+ *     <common> <segment> {<separator> <segment>} <CR-LF>
+ */
+void build_and_send_message(int   sock,
+                            char* buf,       size_t buf_max,
+                            char* common,    size_t common_len,
+                            char* segment,   size_t segment_len,
+                            char* separator)
+{
+    size_t buf_size = strlen(buf);
+    // Buffer already contains some segments,
+    if (buf_size > 0)
+    {
+        // Nothing more to build, so send everything we have
+        if (!segment)
+        {
+            WRITE(sock, "%s\r\n", buf);
+            return;
+        }
+        // Safe to append this new segment
+        else if (buf_size + segment_len + 2 < buf_max) // 2 for "\r\n"
+        {
+            sprintf(buf + buf_size, "%s%s", separator, segment);
+            return;
+        }
+        // Appending this new segment would exceed the limit
+        // => send everything we have, and store the new segment on an empty buffer (fall through)
+        else
+        {
+            WRITE(sock, "%s\r\n", buf);
+        }
+        
+    }
+    // Empty buffer
+    memset(buf, '\0', buf_max);
+    sprintf(buf, "%s%s", common, segment);
 }
 
 
@@ -408,7 +451,7 @@ void cmdNick(CMD_ARGS)
             client_t* other = (client_t *) iter_get(it);
             if (cli == other) continue;
             if (*other->nick && // Note: we should not check |registered| here,
-                                // because two unregistered clients may still have colliding nicknames
+                // because two unregistered clients may still have colliding nicknames
                 check_collision(nick, other->nick))
             {
                 WRITE(cli->sock,
@@ -482,7 +525,7 @@ void cmdUser(CMD_ARGS){
     // If the client is not registered but already has already issued USER, i.e.,
     // she hasn't run NICK but has run USER, then existing user infomation is
     // silently overwritten
-
+    
     // Register the client if possible
     if (!cli->registered && *cli->nick)
     {
@@ -544,20 +587,57 @@ void cmdQuit(CMD_ARGS)
 
 void cmdJoin(CMD_ARGS)
 {
-
+    if (strcmp(params[0], cli->channel->name)) // if user's channel same as param
+        return; //ignore
+    else if (cli->channel) // already has channel
+    {
+        //       cmdPart(CMD_ARGS);   // parts current channel
+        
+        //check if channel exists
+        for (Iterator_LinkedList* it = iter(server_info->channels);
+             !iter_empty(it);
+             it = iter_next(it))
+        {
+            channel_t* other = (channel_t *) iter_yield(it);
+            if (strcmp(params[0], other->name)) // channel found
+            {
+                add_item(other->members, cli); // add cli to list of members in channel
+                cli->channel = other; // make client's channel
+            }
+            
+            //when channel doesn't exist
+            channel_t* chan = malloc(sizeof(channel_t)); // create new requested channel
+            strcpy(chan->name, params[0]);
+            add_item(chan->members, cli); // channels first member as the user
+            add_item(server_info->channels, chan);    // add new channel to list of channels
+            cli->channel = chan;              // client's channel as the channel created
+        }
+        
+    }
 }
+
 
 void cmdPart(CMD_ARGS)
 {
-    /* do something */
+    char quit_msg[RFC_MAX_MSG_LEN]; // create quit msg buf
+    sprintf(quit_msg, ":%s!%s@%s QUIT",
+            cli->nick, cli->user, cli->hostname); // send quit msg
     
+    // remove client from channel members
+    for (Iterator_LinkedList* it = iter(cli->channel->members);
+         !iter_empty(it);
+         it = iter_next(it))
+    {
+        client_t* other = (client_t *) iter_get(it);
+        if (cli == other)
+            iter_drop(it);
+        else
+            write(other->sock, quit_msg, strlen(quit_msg)+1); // quit msg to all other users
+    }
 }
 
-void cmdList(CMD_ARGS)
-{
-    /* do something */
-    
-}
+
+
 
 void cmdPmsg(CMD_ARGS)
 {
