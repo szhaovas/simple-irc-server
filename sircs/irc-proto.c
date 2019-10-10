@@ -587,33 +587,65 @@ void cmdQuit(CMD_ARGS)
 
 void cmdJoin(CMD_ARGS)
 {
+    // Junrui.1: you should verify that the channel name specified by the client is valid
+    // Never, ever, trust a client. All clients are evil.
+    // Just use is_channel_name_valid() which I have written
+    
+    // Junrui.2: the channel the client requests to join may be non-existent.
+    // As per RFC, you should send an error reply
+    
+    
     if (strcmp(params[0], cli->channel->name)) // if user's channel same as param
-        return; //ignore
+        // Junrui.1: Should be !strcmp
+        // Junrui.2: cli->channel may be NULL (client may not have joined a channel yet). This will cause seg fault.
+        // Junrui.3: Use strncmp if you cann't guarantee the safety of the parameter strings (in this case the string was supplied by the client, hence unsafe)
+        return; // ignore
+    
     else if (cli->channel) // already has channel
     {
         //       cmdPart(CMD_ARGS);   // parts current channel
+        // Junrui.1: this isn't quite how CMD_ARGS is supposed to used
+        // Junrui.2: According to Rui's email, we might want to echo QUIT here, instaed of PART
         
-        //check if channel exists
+        // check if channel exists
         for (Iterator_LinkedList* it = iter(server_info->channels);
              !iter_empty(it);
              it = iter_next(it))
         {
-            channel_t* other = (channel_t *) iter_yield(it);
-            if (strcmp(params[0], other->name)) // channel found
+            channel_t* ch = (channel_t *) iter_get(it);
+            if (strcmp(params[0], ch->name)) // channel found
+                // Junrui: Should be !strcmp
             {
-                add_item(other->members, cli); // add cli to list of members in channel
-                cli->channel = other; // make client's channel
+                add_item(ch->members, cli); // add cli to list of members in channel
+                cli->channel = ch; // make client's channel
             }
-            
-            //when channel doesn't exist
-            channel_t* chan = malloc(sizeof(channel_t)); // create new requested channel
-            strcpy(chan->name, params[0]);
-            add_item(chan->members, cli); // channels first member as the user
-            add_item(server_info->channels, chan);    // add new channel to list of channels
-            cli->channel = chan;              // client's channel as the channel created
         }
+        // Junrui: please call iter_clean(it) after you're done
+            
+        //when channel doesn't exist
+        // Junrui: we don't know if a channel exists or not at this point
+        // If it exists, then the code below will also be executed, which is not what you want
+        // Idea: put a flag to indicate if a channel match is found
+        
+        channel_t* chan = malloc(sizeof(channel_t)); // create new requested channel
+        
+        strcpy(chan->name, params[0]);
+        
+        // Junrui: you have not initialized the |member| linked list yet (simply do a malloc).
+        add_item(chan->members, cli); // channels first member as the user
+        add_item(server_info->channels, chan);    // add new channel to list of channels
+        cli->channel = chan;              // client's channel as the channel created
+        // Junrui: Bug: the client may be added twice. Try to figure out why.
         
     }
+    // Junrui: we may want to handle the else branch here (client doesn't already have a channel)
+    
+    /* Several things that I see missing:
+        1. If a client was the only member in his/her previous channel,
+           then that channel should be removed.
+        2. As per RFC, the JOIN should be echoed to all members of the newly joined channel
+        3. As per RFC, the server should send the list of channel members to the client
+     */
 }
 
 
