@@ -5,7 +5,6 @@
 #include <fcntl.h>
 #include <ctype.h> // isalpha(), isdigit()
 #include <stdarg.h> // va_list, etc.
-#include <assert.h>
 
 #include "irc-proto.h"
 #include "sircs.h"
@@ -88,22 +87,22 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
 {
     // Empty messages are silently iginored (as per RFC)
     if (*line == '\0') return;
-    
+
     // Target name in replies
     char* target = *cli->nick ? cli->nick : "*";
-    
+
     char *prefix = NULL, *command, *pstart, *params[MAX_MSG_TOKENS];
     int nparams = 0;
     char *trailing = NULL;
-    
+
     DPRINTF(DEBUG_INPUT, "Handling line: %s\n", line);
     command = line;
-    
+
     if (*line == ':'){
         prefix = ++line;
         command = strchr(prefix, ' ');
     }
-    
+
     if (!command || *command == '\0'){
         // Send an unknown command error
         WRITE(cli->sock,
@@ -114,11 +113,11 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
               command);
         return;
     }
-    
+
     while (*command == ' '){
         *command++ = 0;
     }
-    
+
     if (*command == '\0'){
         // Send an unknown command error
         WRITE(cli->sock,
@@ -129,27 +128,27 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
               command);
         return;
     }
-    
+
     pstart = strchr(command, ' ');
-    
+
     if (pstart){
         while (*pstart == ' ')
             *pstart++ = '\0';
-        
+
         if (*pstart == ':'){
             trailing = pstart;
         } else{
             trailing = strstr(pstart, " :");
         }
-        
+
         if (trailing){
             while (*trailing == ' ')
                 *trailing++ = 0;
-            
+
             if (*trailing == ':')
                 *trailing++ = 0;
         }
-        
+
         do{
             if (*pstart != '\0'){
                 params[nparams++] = pstart;
@@ -157,32 +156,32 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
                 break;
             }
             pstart = strchr(pstart, ' ');
-            
+
             if (pstart){
                 while (*pstart == ' ')
                     *pstart++ = '\0';
             }
         } while (pstart != NULL && nparams < MAX_MSG_TOKENS);
     }
-    
+
     if (trailing && nparams < MAX_MSG_TOKENS){
         params[nparams++] = trailing;
     }
-    
+
     DPRINTF(DEBUG_INPUT, "Prefix:  %s\nCommand: %s\nParams (%d):\n",
             prefix ? prefix : "<none>", command, nparams);
-    
+
     int i;
     for (i = 0; i < nparams; i++){
         DPRINTF(DEBUG_INPUT, "   %s\n", params[i]);
     }
-    
+
     DPRINTF(DEBUG_INPUT, "\n");
-    
+
     // Ignore a command if provided with a prefix different from the client's nickname
     if (prefix && *cli->nick && !strcmp(prefix, cli->nick))
         return;
-    
+
     for (i = 0; i < NELMS(cmds); i++)
     {
         // Specified command matches with a command (case-insensitive)
@@ -214,7 +213,7 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
             return; /* Command already processed */
         }
     }
-    
+
     if (i == NELMS(cmds)){
         // ERROR - unknown command
         WRITE(cli->sock,
@@ -229,65 +228,37 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
 
 
 /**
- * Check if a character is a special character.
+ * Check if character |c| is a special character.
  *
- * <special> ::=
- *   '-'  |  '['  |  ']'  |  '\'  |  '`'  |  '^'  |  '{'  |  '}'
+ * RFC Sec 2.3.1:
+ *   <special> ::=
+ *     '-'  |  '['  |  ']'  |  '\'  |  '`'  |  '^'  |  '{'  |  '}'
  */
-#define IS_SPECIAL(c) (strchr("-[]|\\`^{}", c) != NULL)
-
-
-/**
- * Check if a character is a channel character.
- *
- * <chstring> ::=
- *   <any 8bit code except SPACE, BELL, NUL, CR, LF and comma (',')>
- */
-#define IS_CH_CHAR(c) (strchr(" \a\r\n,", c) == NULL)
+int isspecial_(char c)
+{
+    return strchr("-[]|\\`^{}", c) != NULL;
+}
 
 
 
 /**
  * Check if a nickname is valid
  *
- * <nick> ::= <letter> { <letter> | <number> | <special> }
+ * From RFC:
+ *   <nick> ::= <letter> { <letter> | <number> | <special> }
  */
-int is_nickname_valid(char* nick)
+int is_nickname_valid(char* nick, size_t nick_len)
 {
-    if (*nick == '\0')
-        return FALSE;
-    for (int i = 0; i < RFC_MAX_NICKNAME + 1; i++)
+    for (int i = 0; i < nick_len; i++)
     {
-        if (nick[i] == '\0') return TRUE;
-        if (i == RFC_MAX_NICKNAME) return FALSE;
         char c = nick[i];
         if ( (i == 0 && !isalpha(c)) ||
-            (i > 0  && !(isalpha(c) || isdigit(c) || IS_SPECIAL(c))))
+            (i > 0  && !(isalpha(c) || isdigit(c) || isspecial_(c))))
         {
             return FALSE;
         }
     }
     return TRUE;
-}
-
-
-/**
- * Check if a channel name is valid
- *
- * <channel> ::=
- * ('#' | '&') <chstring>
- */
-int is_channel_valid(char* ch_name)
-{
-    if ( *ch_name != '#' || *ch_name != '&' )
-        return FALSE;
-    for (int i = 1; i < RFC_MAX_NICKNAME + 1; i++)
-    {
-        if (ch_name[i] != '\0') return TRUE;
-        if (i == RFC_MAX_NICKNAME) return FALSE;
-        if (!IS_CH_CHAR(ch_name[i])) return FALSE;
-    }
-    return TRUE; // Never reached
 }
 
 
@@ -321,12 +292,12 @@ int equivalent_char(char a, char b)
 /**
  * Check if two nicknames |this| and |that| collide.
  */
-int check_collision(char* this, char* that)
+int check_collision(size_t this_len, char* this, char* that)
 {
-    for (int i = 0; i < RFC_MAX_NICKNAME; i++)
+    for (int i = 0; i < this_len; i++)
     {
         char ai = this[i], bi = that[i];
-        // Same length && equiv chars so far => same string
+        // Same length => same string
         if ( ai == '\0' && bi == '\0')
             return 1;
         // Different length
@@ -336,7 +307,8 @@ int check_collision(char* this, char* that)
         else if ( !equivalent_char(ai, bi) )
             return 0;
     }
-    // End of both strings => the same len and equiv chars
+    // Implies two strings have the same length and
+    // equivalent sequence of characters
     return 1;
 }
 
@@ -351,31 +323,19 @@ void motd(int sock, char* hostname)
           hostname,
           RPL_MOTDSTART,
           hostname);
-    
+
     WRITE(sock,
           ":%s %d :- %s\r\n",
           hostname,
           RPL_MOTD,
           MOTD_STR);
-    
+
     WRITE(sock,
           ":%s %d :End of /MOTD command\r\n",
           hostname,
           RPL_ENDOFMOTD);
 }
 
-
-
-/**
- * Remove an empty channel.
- */
-void remove_empty_channel(server_info_t* server_info, channel_t* ch)
-{
-    assert(ch->members->size == 0);
-    drop_item(server_info->channels, ch);
-    free(ch->members);
-    free(ch);
-}
 
 
 /* Command handlers */
@@ -385,22 +345,23 @@ void remove_empty_channel(server_info_t* server_info, channel_t* ch)
  */
 void cmdNick(CMD_ARGS)
 {
-    int nick_valid = is_nickname_valid(params[0]);
+    char* nick = params[0];
+    char nick_buf[RFC_MAX_NICKNAME+1];
+    nick_buf[RFC_MAX_NICKNAME] = '\0';
+    strncpy(nick_buf, nick, RFC_MAX_NICKNAME);
+    size_t nick_len = strlen(nick_buf);
+    int nick_valid = is_nickname_valid(nick, nick_len);
     if (!nick_valid)
     {
-        char nick_safe[RFC_MAX_NICKNAME+1];
-        nick_safe[RFC_MAX_NICKNAME] = '\0';
-        strncpy(nick_safe, params[0], RFC_MAX_NICKNAME);
         WRITE(cli->sock,
               ":%s %d %s %s :Erroneus nickname\r\n",
               server_info->hostname,
               ERR_ERRONEOUSNICKNAME,
               *cli->nick? cli->nick: "*",
-              nick_safe);
+              nick_buf);
     }
     else /* nick valid */
     {
-        char* nick = params[0];
         // Check for nickname collision
         Iterator_LinkedList* it;
         for (it = iter(server_info->clients); !iter_empty(it); it = iter_next(it))
@@ -409,29 +370,29 @@ void cmdNick(CMD_ARGS)
             if (cli == other) continue;
             if (*other->nick && // Note: we should not check |registered| here,
                                 // because two unregistered clients may still have colliding nicknames
-                check_collision(nick, other->nick))
+                check_collision(nick_len, nick_buf, other->nick))
             {
                 WRITE(cli->sock,
                       ":%s %d %s %s :Nickname is already in use\r\n",
                       server_info->hostname,
                       ERR_NICKNAMEINUSE,
                       *cli->nick? cli->nick: "*",
-                      nick);
+                      nick_buf);
                 return iter_clean(it);
             }
         } /* Iterator loop */
         iter_clean(it);
-        
+
         /* No collision */
-        
+
         // Make a copy of old nickname, if any
         char old_nick[RFC_MAX_NICKNAME];
         if (*cli->nick)
             strcpy(old_nick, cli->nick);
-        
+
         // Set client's nickname
-        strcpy(cli->nick, nick); // Edge case: new nick same as old nick => No effect
-        
+        strcpy(cli->nick, nick_buf); // Edge case: new nick same as old nick => No effect
+
         // If user already is in a channel
         // => Echo NICK to everyone else in the same channel
         if (cli->channel)
@@ -450,7 +411,7 @@ void cmdNick(CMD_ARGS)
             } /* Iterator loop */
             return iter_clean(it);
         }
-        
+
         // Otherwise, the client is not in any channel, so she is either
         // (a) registered, or (b) not registered, in which case we attempt to
         // complete the registration if possible
@@ -459,7 +420,7 @@ void cmdNick(CMD_ARGS)
             cli->registered = 1;
             motd(cli->sock, server_info->hostname);
         }
-    } /* nick valid */
+    }
 }
 
 
@@ -474,9 +435,10 @@ void cmdUser(CMD_ARGS){
               ERR_ALREADYREGISTRED,
               cli->nick);
     }
-    
+
     // Update user information
     strncpy(cli->user, params[0], MAX_USERNAME-1);
+    strncpy(cli->servername, params[2], MAX_SERVERNAME-1);
     strncpy(cli->realname, params[3], MAX_REALNAME-1);
     // Edge case -
     // If the client is not registered but already has already issued USER, i.e.,
@@ -497,12 +459,11 @@ void cmdQuit(CMD_ARGS)
 {
     // Close the connection
     close(cli->sock);
-    
+
     // Remove client from the server's client list
     // (Junrui) FIXME: This iterates over the whole list and defeats the purpose?
-    // Backward pointer?
     drop_item(server_info->clients, cli);
-    
+
     // If the client has joined a channel, then we need to
     //   1. Remove her from the member list
     //   2. Echo QUIT to other members, if any
@@ -517,56 +478,75 @@ void cmdQuit(CMD_ARGS)
              it = iter_next(it))
         {
             client_t* other = (client_t *) iter_get(it);
-            
+
             // Client herself => Remove client from the channel member list
             if (cli == other)
                 iter_drop(it);
-            
+
             // Someone else => Echo quit message
             else
             {
-                // For safety reasons, ignore client's farewell message and always use default
-                WRITE(other->sock,
-                      ":%s!%s@%s QUIT :Connection closed\r\n",
-                      cli->nick,
-                      cli->user,
-                      cli->hostname);
+                // Client did not specify the farewell message => Use default
+                if (!nparams)
+                {
+                    WRITE(other->sock,
+                          ":%s!%s@%s QUIT :Connection closed",
+                          cli->nick,
+                          cli->user,
+                          cli->hostname);
+                }
+                // Client has specified farewell message
+                else
+                {
+                    WRITE(cli->sock,
+                          ":%s!%s@%s QUIT :%s",
+                          cli->nick,
+                          cli->user,
+                          cli->hostname,
+                          params[0]);
+                }
             }
         } /* Iterator loop */
         iter_clean(it);
-        
-        if (cli->channel->members == 0)
-            remove_empty_channel(server_info, cli->channel);
-    } /* if (cli->channel) */
-    free(cli);
+
+        if (cli->channel->members->size == 0)
+        {
+            drop_item(server_info->channels, cli->channel);
+        }
+        // FIXME: free channel struct
+        // FIXME: free client struct
+    }
 }
+
 
 
 void cmdJoin(CMD_ARGS)
 {
+    /* do something */
 
 }
 
 void cmdPart(CMD_ARGS)
 {
     /* do something */
-    
+
 }
 
 void cmdList(CMD_ARGS)
 {
     /* do something */
-    
+
 }
 
 void cmdPmsg(CMD_ARGS)
 {
-    /* do something */
-    
+    //ERR_NORECIPIENT ":No recipient given (<command>)"
+    //ERR_NOTEXTTOSEND
+    //ERR_CAN
 }
 
 void cmdWho(CMD_ARGS)
 {
     /* do something */
-    
+
 }
