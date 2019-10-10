@@ -25,6 +25,8 @@ void init_list(LinkedList* list);
 
 Node* add_item(LinkedList* list, void* data);
 
+int find_item(LinkedList* list, void* data);
+
 void drop_item(LinkedList* list, void* data);
 
 void* drop_node(LinkedList* list, Node* node);

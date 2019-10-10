@@ -59,6 +59,25 @@ Node* add_item(LinkedList* list, void* data)
 }
 
 
+/**
+ * Find an item in a linked list.
+ */
+int find_item(LinkedList* list, void* data)
+{
+    Iterator_LinkedList* it;
+    for (it = iter(list); !iter_empty(it); it = iter_next(it))
+    {
+        if (iter_get(it) == data)
+        {
+            iter_clean(it);
+            return TRUE;
+        }
+    }
+    iter_clean(it);
+    return FALSE;
+}
+
+
 
 /**
  * Drop a node from a linked list.
