@@ -640,7 +640,7 @@ void cmdJoin(CMD_ARGS)
     }
     // Junrui: we may want to handle the else branch here (client doesn't already have a channel)
     
-    /* Several things that I see missing:
+    /* Junrui: Several things that I see missing:
         1. If a client was the only member in his/her previous channel,
            then that channel should be removed.
         2. As per RFC, the JOIN should be echoed to all members of the newly joined channel
@@ -654,6 +654,7 @@ void cmdPart(CMD_ARGS)
     char quit_msg[RFC_MAX_MSG_LEN]; // create quit msg buf
     sprintf(quit_msg, ":%s!%s@%s QUIT",
             cli->nick, cli->user, cli->hostname); // send quit msg
+    // Junrui: why echoing QUIT back to the client?
     
     // remove client from channel members
     for (Iterator_LinkedList* it = iter(cli->channel->members);
@@ -664,8 +665,16 @@ void cmdPart(CMD_ARGS)
         if (cli == other)
             iter_drop(it);
         else
+            // Junrui: should echo PART, not QUIT
             write(other->sock, quit_msg, strlen(quit_msg)+1); // quit msg to all other users
     }
+    // Junrui: please call iter_clean(it) after you're done
+    
+    /* Junrui: Things that I see missing:
+     1. If a client was the only member in his/her previous channel,
+     then that channel should be removed.
+     2. You should check for ERR_NOSUCHCHANNEL and ERR_NOTONCHANNEL.
+     */
 }
 
 
