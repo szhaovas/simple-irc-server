@@ -62,7 +62,7 @@ void iter_clean(Iterator_LinkedList* it);
 
 int iter_empty(Iterator_LinkedList* it);
 
-Iterator_LinkedList* iter_next(Iterator_LinkedList* it);
+void iter_next(Iterator_LinkedList* it);
 
 void* iter_get(Iterator_LinkedList* it);
 

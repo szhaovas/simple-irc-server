@@ -28,9 +28,9 @@ typedef void (*cmd_handler_t)(CMD_ARGS);
 // Server reply macro
 #define WRITE(sock, fmt, ...) do { dprintf(sock, fmt, ##__VA_ARGS__); } while (0)
 #define GET_SAFE_NAME(safe_name, unsafe_name) \
-char safe_name[RFC_MAX_NICKNAME+1]; \
-safe_name[RFC_MAX_NICKNAME] = '\0'; \
-strncpy(safe_name, unsafe_name, RFC_MAX_NICKNAME);
+    char safe_name[RFC_MAX_NICKNAME+1]; \
+    safe_name[RFC_MAX_NICKNAME] = '\0'; \
+    strncpy(safe_name, unsafe_name, RFC_MAX_NICKNAME);
 
 // Message of the day
 #define MOTD_STR "ようこそ、OZの世界へ"
@@ -448,7 +448,7 @@ void cmdNick(CMD_ARGS)
         char* nick = params[0];
         // Check for nickname collision
         Iterator_LinkedList* it;
-        for (it = iter(server_info->clients); !iter_empty(it); it = iter_next(it))
+        for (it = iter(server_info->clients); !iter_empty(it); iter_next(it))
         {
             client_t* other = (client_t *) iter_get(it);
             if (cli == other) continue;
@@ -482,7 +482,7 @@ void cmdNick(CMD_ARGS)
         if (cli->channel)
         {
             Iterator_LinkedList* it;
-            for (it = iter(cli->channel->members); !iter_empty(it); it = iter_next(it))
+            for (it = iter(cli->channel->members); !iter_empty(it); iter_next(it))
             {
                 client_t* other = (client_t *) iter_get(it);
                 if (cli == other) continue;
@@ -561,7 +561,7 @@ void cmdQuit(CMD_ARGS)
         Iterator_LinkedList* it;
         for (it = iter(cli->channel->members);
              !iter_empty(it);
-             it = iter_next(it))
+             iter_next(it))
         {
             client_t* other = (client_t *) iter_get(it);
             
@@ -592,8 +592,6 @@ void cmdQuit(CMD_ARGS)
 }
 
 
-
-// FIXME: handle a list of targets
 void cmdJoin(CMD_ARGS)
 {
     char* channel_to_join = params[0];
@@ -620,7 +618,7 @@ void cmdJoin(CMD_ARGS)
         Iterator_LinkedList* it;
         for (it = iter(server_info->channels);
              !iter_empty(it);
-             it = iter_next(it))
+             iter_next(it))
         {
             channel_t* ch = (channel_t *) iter_get(it);
             if ( !strncmp(channel_to_join, ch->name, RFC_MAX_NICKNAME+1) )
@@ -639,7 +637,7 @@ void cmdJoin(CMD_ARGS)
             // Echo QUIT to members of the previous channel
             channel_t* prev_ch = cli->channel;
             Iterator_LinkedList* it;
-            for (it = iter(prev_ch->members); !iter_empty(it); it = iter_next(it))
+            for (it = iter(prev_ch->members); !iter_empty(it); iter_next(it))
             {
                 client_t* other = (client_t *) iter_get(it);
                 if (other == cli)
@@ -692,7 +690,7 @@ void cmdJoin(CMD_ARGS)
 //        size_t common_len = strlen(common);
 //        char build_buf[RFC_MAX_MSG_LEN+1];
         
-        for (it = iter(ch_found->members); !iter_empty(it); it = iter_next(it))
+        for (it = iter(ch_found->members); !iter_empty(it); iter_next(it))
         {
             client_t* other = (client_t *) iter_get(it);
             
@@ -707,12 +705,14 @@ void cmdJoin(CMD_ARGS)
             // REPLY - Send channel members to the newly joined client
             // Since there may be too many nicknames in the channel to fit into a single message,
             // we build smaller messages, and send them out individually.
+            // From RFC: <=|@> <channel> :[[@|+]<nick> [[@|+]<nick> [...]]]
+            //
             //            build_and_send_message(cli->sock,
             //                                   build_buf,   RFC_MAX_MSG_LEN+1,
             //                                   common,      common_len,
             //                                   other->nick, strlen(other->nick),
             //                                   " ");
-            // From RFC: <=|@> <channel> :[[@|+]<nick> [[@|+]<nick> [...]]]
+
             WRITE(cli->sock,
                   ":%s %d %s = %s :%s\r\n",
                   server_info->hostname,
@@ -722,6 +722,11 @@ void cmdJoin(CMD_ARGS)
                   other->nick);
         } /* Iterator loop */
         iter_clean(it);
+//        build_and_send_message(cli->sock,
+//                              build_buf,   RFC_MAX_MSG_LEN+1,
+//                              common,      common_len,
+//                              "", 0,
+//                              " ");
         
         WRITE(cli->sock,
               ":%s %d %s %s :End of /NAMES list\r\n", // FIXME: explanation not helpful
@@ -733,7 +738,6 @@ void cmdJoin(CMD_ARGS)
 }
 
 
-// FIXME: handle a list of targets
 void cmdPart(CMD_ARGS)
 {
     char* channel_to_part = params[0];
@@ -746,7 +750,7 @@ void cmdPart(CMD_ARGS)
     // Find the channel the client wishes to part
     channel_t* ch_found = NULL;
     Iterator_LinkedList* it;
-    for (it = iter(server_info->channels); !iter_empty(it); it = iter_next(it))
+    for (it = iter(server_info->channels); !iter_empty(it); iter_next(it))
     {
         channel_t* ch = (channel_t *) iter_get(it);
         if (!strncmp(ch->name, channel_to_part, RFC_MAX_NICKNAME+1))
@@ -780,7 +784,7 @@ void cmdPart(CMD_ARGS)
     {
         // Echo
         Iterator_LinkedList* it;
-        for (it = iter(ch_found->members); !iter_empty(it); it = iter_next(it))
+        for (it = iter(ch_found->members); !iter_empty(it); iter_next(it))
         {
             client_t* other = (client_t *) iter_get(it);
             
@@ -817,7 +821,7 @@ void cmdList(CMD_ARGS)
           cli->nick);
     
     Iterator_LinkedList* it;
-    for (it = iter(server_info->channels); !iter_empty(it); it = iter_next(it))
+    for (it = iter(server_info->channels); !iter_empty(it); iter_next(it))
     {
         channel_t* ch = (channel_t *) iter_get(it);
         WRITE(cli->sock,
@@ -848,6 +852,50 @@ void cmdPmsg(CMD_ARGS)
 
 void cmdWho(CMD_ARGS)
 {
-    /* do something */
-    
+    char* item_start = params[0]; // Start of possilby a list
+    char* item_end;
+    do
+    {
+        item_end = strchr(params[0], ',');
+        if (item_end)
+            *item_end = '\0';
+        GET_SAFE_NAME(safe_query, item_start);
+        
+        // Loop through all channels
+        Iterator_LinkedList* it_ch;
+        for (it_ch = iter(server_info->channels); !iter_empty(it_ch); iter_next(it_ch))
+        {
+            channel_t* channel = (channel_t *) iter_get(it_ch);
+            if (!strcmp(channel->name, safe_query)) // Channel name matches
+            {
+                // Loop through all members of that channel
+                Iterator_LinkedList* it_cli;
+                for (it_cli = iter(channel->members); !iter_empty(it_cli); iter_next(it_cli))
+                {
+                    client_t* other = (client_t *) iter_get(it_cli);
+                    // RFC: <channel> <user> <host> <server> <nick> <H|G>[*][@|+] :<hopcount> <real name>
+                    WRITE(cli->sock,
+                          "%s %d %s %s %s %s %s %s H :0 %s :End of /WHO list\r\n",
+                          server_info->hostname, RPL_WHOREPLY, cli->nick,
+                          channel->name,
+                          other->user,
+                          other->hostname,
+                          server_info->hostname,
+                          other->nick,
+                          other->realname
+                          );
+                 }
+            
+            }
+        }
+        iter_clean(it_ch);
+        
+        WRITE(cli->sock,
+              "%s %d %s %s :End of /WHO list\r\n",
+              server_info->hostname,
+              RPL_ENDOFWHO,
+              cli->nick,
+              safe_query);
+
+    } while (item_end);
 }
