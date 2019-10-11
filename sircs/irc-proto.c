@@ -27,6 +27,10 @@ typedef void (*cmd_handler_t)(CMD_ARGS);
 
 // Server reply macro
 #define WRITE(sock, fmt, ...) do { dprintf(sock, fmt, ##__VA_ARGS__); } while (0)
+#define GET_SAFE_NAME(safe_name, unsafe_name) \
+char safe_name[RFC_MAX_NICKNAME+1]; \
+safe_name[RFC_MAX_NICKNAME] = '\0'; \
+strncpy(safe_name, unsafe_name, RFC_MAX_NICKNAME);
 
 // Message of the day
 #define MOTD_STR "ようこそ、OZの世界へ"
@@ -279,7 +283,7 @@ int is_nickname_valid(char* nick)
  */
 int is_channel_valid(char* ch_name)
 {
-    if ( *ch_name != '#' || *ch_name != '&' )
+    if ( *ch_name != '#' && *ch_name != '&' )
         return FALSE;
     for (int i = 1; i < RFC_MAX_NICKNAME + 1; i++)
     {
@@ -431,9 +435,7 @@ void cmdNick(CMD_ARGS)
     int nick_valid = is_nickname_valid(params[0]);
     if (!nick_valid)
     {
-        char nick_safe[RFC_MAX_NICKNAME+1];
-        nick_safe[RFC_MAX_NICKNAME] = '\0';
-        strncpy(nick_safe, params[0], RFC_MAX_NICKNAME);
+        GET_SAFE_NAME(nick_safe, params[0]);
         WRITE(cli->sock,
               ":%s %d %s %s :Erroneus nickname\r\n",
               server_info->hostname,
@@ -521,7 +523,8 @@ void cmdUser(CMD_ARGS){
     // Update user information
     strncpy(cli->user, params[0], MAX_USERNAME-1);
     strncpy(cli->realname, params[3], MAX_REALNAME-1);
-    // Edge case -
+    
+    // CHOICE:
     // If the client is not registered but already has already issued USER, i.e.,
     // she hasn't run NICK but has run USER, then existing user infomation is
     // silently overwritten
@@ -553,6 +556,7 @@ void cmdQuit(CMD_ARGS)
     //      then the channel is removed
     if (cli->channel)
     {
+        channel_t* prev_ch = cli->channel;
         // Loop through members from the client's channel
         Iterator_LinkedList* it;
         for (it = iter(cli->channel->members);
@@ -563,7 +567,10 @@ void cmdQuit(CMD_ARGS)
             
             // Client herself => Remove client from the channel member list
             if (cli == other)
+            {
                 iter_drop(it);
+                cli->channel = NULL;
+            }
             
             // Someone else => Echo quit message
             else
@@ -578,8 +585,8 @@ void cmdQuit(CMD_ARGS)
         } /* Iterator loop */
         iter_clean(it);
         
-        if (cli->channel->members == 0)
-            remove_empty_channel(server_info, cli->channel);
+        if (prev_ch->members == 0)
+            remove_empty_channel(server_info, prev_ch);
     } /* if (cli->channel) */
     free(cli);
 }
@@ -589,11 +596,16 @@ void cmdQuit(CMD_ARGS)
 // FIXME: handle a list of targets
 void cmdJoin(CMD_ARGS)
 {
-    if ( !is_channel_valid(params[0]) )
+    char* channel_to_join = params[0];
+    
+    // CHOICE: If there is a list of targets, pick the first one and ignore the rest
+    char* comma = strchr(channel_to_join, ',');
+    if (comma)
+        *comma = '\0'; // Replace ',' with '\0' to take only the first target
+    
+    if ( !is_channel_valid(channel_to_join) )
     {
-        char chname_safe[RFC_MAX_NICKNAME+1];
-        chname_safe[RFC_MAX_NICKNAME] = '\0';
-        strncpy(chname_safe, params[0], RFC_MAX_NICKNAME);
+        GET_SAFE_NAME(chname_safe, channel_to_join);
         WRITE(cli->sock,
               ":%s %d %s %s :No such channel\r\n",
               server_info->hostname,
@@ -603,17 +615,17 @@ void cmdJoin(CMD_ARGS)
     }
     else /* Channel name valid */
     {
-        char* ch_name = params[0]; // Channel names have the same len as nick
-        channel_t* ch_match = NULL;
+        // Find the channel the client wishes to join
+        channel_t* ch_found = NULL;
         Iterator_LinkedList* it;
         for (it = iter(server_info->channels);
              !iter_empty(it);
              it = iter_next(it))
         {
             channel_t* ch = (channel_t *) iter_get(it);
-            if ( !strcmp(ch_name, ch->name) ) // Same string
+            if ( !strncmp(channel_to_join, ch->name, RFC_MAX_NICKNAME+1) )
             {
-                ch_match = ch;
+                ch_found = ch;
                 break;
             }
         } /* Iterator loop */
@@ -622,68 +634,67 @@ void cmdJoin(CMD_ARGS)
         if (cli->channel) /* Client was previously in a channel */
         {
             // Join a channel of which the client is already a member => Do nothing
-            if ( ch_match && !strcmp(cli->channel->name, ch_match->name) ) return;
+            if ( ch_found && !strcmp(cli->channel->name, ch_found->name) ) return;
             
             // Echo QUIT to members of the previous channel
-            // Note: As per RFC, must echo first, and then remove
             channel_t* prev_ch = cli->channel;
             Iterator_LinkedList* it;
             for (it = iter(prev_ch->members); !iter_empty(it); it = iter_next(it))
             {
                 client_t* other = (client_t *) iter_get(it);
                 if (other == cli)
+                {
                     iter_drop(it);
-                WRITE(other->sock,
-                      ":%s!%s@%s QUIT\r\n",
-                      cli->nick,
-                      cli->user,
-                      cli->hostname);
+                    cli->channel = NULL;
+                }
+                else
+                {
+                    WRITE(other->sock,
+                          ":%s!%s@%s QUIT\r\n",
+                          cli->nick,
+                          cli->user,
+                          cli->hostname);
+                }
             } /* Iterator loop */
             iter_clean(it);
             
             // Remove the channel if it becomes empty
             if (prev_ch->members->size == 0)
-                remove_empty_channel(server_info, cli->channel);
+                remove_empty_channel(server_info, prev_ch);
         } /* Client was previously in a channel */
         
-        // Client is no longer in any channel
+        // Client is no longer in any channel by this point
         
-        if (!ch_match) // Join an not-yet-existing channel
+        if (!ch_found) // Create the channel if it doesn't exist yet
         {
             channel_t* new_ch = malloc(sizeof(channel_t));
-            new_ch->members = malloc(sizeof(LinkedList));
-            strcpy(new_ch->name, ch_name);
-            ch_match = new_ch;
+            LinkedList* members = malloc(sizeof(LinkedList));
+            init_list(members);
+            new_ch->members = members;
+            strcpy(new_ch->name, channel_to_join);
+            add_item(server_info->channels, new_ch);
+            ch_found = new_ch;
         }
         
-        // Channel to join exists at this point
+        // Channel to join (ch_found) exists at this point
         
-        add_item(ch_match->members, cli); // Add client to the member list
-        cli->channel = ch_match;
+        add_item(ch_found->members, cli); // Add client to the member list
+        cli->channel = ch_found;
         
         // Building RPL_NAMREPLY message(s)
-        char common[RFC_MAX_MSG_LEN+1];
-        sprintf(common,
-                ":%s %d %s = %s :",
-                server_info->hostname,
-                RPL_NAMREPLY,
-                cli->nick,
-                ch_match->name);
-        size_t common_len = strlen(common);
-        char build_buf[RFC_MAX_MSG_LEN+1];
+//        char common[RFC_MAX_MSG_LEN+1];
+//        sprintf(common,
+//                ":%s %d %s = %s :",
+//                server_info->hostname,
+//                RPL_NAMREPLY,
+//                cli->nick,
+//                ch_found->name);
+//        size_t common_len = strlen(common);
+//        char build_buf[RFC_MAX_MSG_LEN+1];
         
-        for (it = iter(ch_match->members); !iter_empty(it); it = iter_next(it))
+        for (it = iter(ch_found->members); !iter_empty(it); it = iter_next(it))
         {
             client_t* other = (client_t *) iter_get(it);
-            
-            // REPLY - Send channel members to the newly joined client
-            // Since there may be too many nicknames in the channel to fit into a single message,
-            // we build smaller messages, and send them out individually.
-            build_and_send_message(other->sock,
-                                   build_buf,   RFC_MAX_MSG_LEN+1,
-                                   common,      common_len,
-                                   other->nick, strlen(other->nick),
-                                   " ");
             
             // ECHO - JOIN to all members, including the newly joined client
             WRITE(other->sock,
@@ -691,16 +702,33 @@ void cmdJoin(CMD_ARGS)
                   cli->nick,
                   cli->user,
                   cli->hostname,
-                  ch_match->name);
+                  ch_found->name);
+            
+            // REPLY - Send channel members to the newly joined client
+            // Since there may be too many nicknames in the channel to fit into a single message,
+            // we build smaller messages, and send them out individually.
+            //            build_and_send_message(cli->sock,
+            //                                   build_buf,   RFC_MAX_MSG_LEN+1,
+            //                                   common,      common_len,
+            //                                   other->nick, strlen(other->nick),
+            //                                   " ");
+            // From RFC: <=|@> <channel> :[[@|+]<nick> [[@|+]<nick> [...]]]
+            WRITE(cli->sock,
+                  ":%s %d %s = %s :%s\r\n",
+                  server_info->hostname,
+                  RPL_NAMREPLY,
+                  cli->nick,
+                  ch_found->name,
+                  other->nick);
         } /* Iterator loop */
         iter_clean(it);
         
         WRITE(cli->sock,
-              ":%s %d %s %s :End of /NAMES list\r\n",
+              ":%s %d %s %s :End of /NAMES list\r\n", // FIXME: explanation not helpful
               server_info->hostname,
               RPL_ENDOFNAMES,
               cli->nick,
-              ch_match->name);
+              ch_found->name);
     } /* Channel name valid */
 }
 
@@ -708,62 +736,74 @@ void cmdJoin(CMD_ARGS)
 // FIXME: handle a list of targets
 void cmdPart(CMD_ARGS)
 {
-    channel_t* ch_match = NULL;
+    char* channel_to_part = params[0];
+    
+    // CHOICE: If there is a list of targets, pick the first one and ignore the rest
+    char* comma = strchr(channel_to_part, ',');
+    if (comma)
+        *comma = '\0'; // Replace ',' with '\0' to take only the first target
+    
+    // Find the channel the client wishes to part
+    channel_t* ch_found = NULL;
     Iterator_LinkedList* it;
     for (it = iter(server_info->channels); !iter_empty(it); it = iter_next(it))
     {
         channel_t* ch = (channel_t *) iter_get(it);
-        if (!strncmp(ch->name, params[0], RFC_MAX_NICKNAME+1))
+        if (!strncmp(ch->name, channel_to_part, RFC_MAX_NICKNAME+1))
         {
-            ch_match = ch;
+            ch_found = ch;
             break;
         }
     } /* Iterator loop */
     iter_clean(it);
     
-    if (!ch_match) // ERROR - No such channel
+    if (!ch_found) // ERROR - No such channel
     {
-        char safe_ch_name[RFC_MAX_NICKNAME+1];
-        safe_ch_name[RFC_MAX_NICKNAME] = '\0';
-        strncpy(safe_ch_name, params[0], RFC_MAX_NICKNAME);
+        GET_SAFE_NAME(safe_chname, channel_to_part);
         WRITE(cli->sock,
               ":%s %d %s %s :No such channel\r\n",
               server_info->hostname,
               ERR_NOSUCHCHANNEL,
               cli->nick,
-              safe_ch_name);
+              safe_chname);
     }
-    else if ( !find_item(ch_match->members, cli) ) // ERROR - Not on channel
+    else if ( !find_item(ch_found->members, cli) ) // ERROR - Not on channel
     {
         WRITE(cli->sock,
               ":%s %d %s %s :You're not on that channel\r\n",
               server_info->hostname,
               ERR_NOTONCHANNEL,
               cli->nick,
-              ch_match->name);
+              ch_found->name);
     }
-    else
+    else // Client is indeed in the channel to part
     {
+        // Echo
         Iterator_LinkedList* it;
-        for (it = iter(ch_match->members); !iter_empty(it); it = iter_next(it))
+        for (it = iter(ch_found->members); !iter_empty(it); it = iter_next(it))
         {
             client_t* other = (client_t *) iter_get(it);
             
-            // ECHO - Part to every one on the same channel (FIXME: including the parting client?)
+            // ECHO - PART to every one on the same channel (CHOICE: including the parting client)
             WRITE(other->sock,
-                  "%s!%s@%s PART %s\r\n",
+                  ":%s!%s@%s PART %s\r\n",
                   cli->nick,
                   cli->user,
                   cli->hostname,
-                  ch_match->name);
+                  ch_found->name);
             
-            if (other == cli) iter_drop(it);
+            // FIXME: RFC requires that echoing must be done before a client is removed (CHOICE: which we have not implemented here). Why?
+            if (other == cli)
+            {
+                iter_drop(it);
+                cli->channel = NULL;
+            }
         } /* Iterator loop */
         iter_clean(it);
         
         // Remove the channel if it is empty
-        if (ch_match->members->size == 0)
-            remove_empty_channel(server_info, ch_match);
+        if (ch_found->members->size == 0)
+            remove_empty_channel(server_info, ch_found);
     }
     
 }
@@ -795,8 +835,6 @@ void cmdList(CMD_ARGS)
           server_info->hostname,
           RPL_LISTEND,
           cli->nick);
-    
-    iter_clean(it);
 }
 
 
