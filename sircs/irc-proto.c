@@ -856,7 +856,7 @@ void cmdWho(CMD_ARGS)
     char* item_end;
     do
     {
-        item_end = strchr(params[0], ',');
+        item_end = strchr(item_start, ',');
         if (item_end)
             *item_end = '\0';
         GET_SAFE_NAME(safe_query, item_start);
@@ -896,6 +896,9 @@ void cmdWho(CMD_ARGS)
               RPL_ENDOFWHO,
               cli->nick,
               safe_query);
+        
+        if (item_end)
+            item_start = item_end + 1;
 
     } while (item_end);
 }
