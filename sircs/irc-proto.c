@@ -9,7 +9,6 @@
 #include "irc-proto.h"
 #include "sircs.h"
 #include "debug.h"
-#include "linked-list.h"
 
 #define MAX_COMMAND 16
 
