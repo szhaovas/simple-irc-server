@@ -28,9 +28,9 @@ typedef void (*cmd_handler_t)(CMD_ARGS);
 // Server reply macro
 #define WRITE(sock, fmt, ...) do { dprintf(sock, fmt, ##__VA_ARGS__); } while (0)
 #define GET_SAFE_NAME(safe_name, unsafe_name) \
-    char safe_name[RFC_MAX_NICKNAME+1]; \
-    safe_name[RFC_MAX_NICKNAME] = '\0'; \
-    strncpy(safe_name, unsafe_name, RFC_MAX_NICKNAME);
+char safe_name[RFC_MAX_NICKNAME+1]; \
+safe_name[RFC_MAX_NICKNAME] = '\0'; \
+strncpy(safe_name, unsafe_name, RFC_MAX_NICKNAME);
 
 // Message of the day
 #define MOTD_STR "ようこそ、OZの世界へ"
@@ -425,6 +425,7 @@ void build_and_send_message(int   sock,
 }
 
 
+
 /* Command handlers */
 
 /**
@@ -592,6 +593,7 @@ void cmdQuit(CMD_ARGS)
 }
 
 
+
 void cmdJoin(CMD_ARGS)
 {
     char* channel_to_join = params[0];
@@ -680,15 +682,15 @@ void cmdJoin(CMD_ARGS)
         cli->channel = ch_found;
         
         // Building RPL_NAMREPLY message(s)
-//        char common[RFC_MAX_MSG_LEN+1];
-//        sprintf(common,
-//                ":%s %d %s = %s :",
-//                server_info->hostname,
-//                RPL_NAMREPLY,
-//                cli->nick,
-//                ch_found->name);
-//        size_t common_len = strlen(common);
-//        char build_buf[RFC_MAX_MSG_LEN+1];
+        //        char common[RFC_MAX_MSG_LEN+1];
+        //        sprintf(common,
+        //                ":%s %d %s = %s :",
+        //                server_info->hostname,
+        //                RPL_NAMREPLY,
+        //                cli->nick,
+        //                ch_found->name);
+        //        size_t common_len = strlen(common);
+        //        char build_buf[RFC_MAX_MSG_LEN+1];
         
         for (it = iter(ch_found->members); !iter_empty(it); iter_next(it))
         {
@@ -712,7 +714,7 @@ void cmdJoin(CMD_ARGS)
             //                                   common,      common_len,
             //                                   other->nick, strlen(other->nick),
             //                                   " ");
-
+            
             WRITE(cli->sock,
                   ":%s %d %s = %s :%s\r\n",
                   server_info->hostname,
@@ -722,11 +724,11 @@ void cmdJoin(CMD_ARGS)
                   other->nick);
         } /* Iterator loop */
         iter_clean(it);
-//        build_and_send_message(cli->sock,
-//                              build_buf,   RFC_MAX_MSG_LEN+1,
-//                              common,      common_len,
-//                              "", 0,
-//                              " ");
+        //        build_and_send_message(cli->sock,
+        //                              build_buf,   RFC_MAX_MSG_LEN+1,
+        //                              common,      common_len,
+        //                              "", 0,
+        //                              " ");
         
         WRITE(cli->sock,
               ":%s %d %s %s :End of /NAMES list\r\n", // FIXME: explanation not helpful
@@ -736,6 +738,7 @@ void cmdJoin(CMD_ARGS)
               ch_found->name);
     } /* Channel name valid */
 }
+
 
 
 void cmdPart(CMD_ARGS)
@@ -812,6 +815,8 @@ void cmdPart(CMD_ARGS)
     
 }
 
+
+
 void cmdList(CMD_ARGS)
 {
     WRITE(cli->sock,
@@ -843,12 +848,13 @@ void cmdList(CMD_ARGS)
 
 
 
-
 void cmdPmsg(CMD_ARGS)
 {
     /* do something */
     
 }
+
+
 
 void cmdWho(CMD_ARGS)
 {
@@ -884,10 +890,10 @@ void cmdWho(CMD_ARGS)
                           other->nick,
                           other->realname
                           );
-                 }
-            
+                } /* Iterator loop */
+                iter_clean(it_cli);
             }
-        }
+        } /* Iterator loop */
         iter_clean(it_ch);
         
         WRITE(cli->sock,
@@ -899,6 +905,6 @@ void cmdWho(CMD_ARGS)
         
         if (item_end)
             item_start = item_end + 1;
-
+        
     } while (item_end);
 }
