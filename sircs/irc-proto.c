@@ -9,6 +9,7 @@
 #include "irc-proto.h"
 #include "sircs.h"
 #include "debug.h"
+#include "linked-list.h"
 
 #define MAX_COMMAND 16
 
@@ -198,6 +199,14 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
             }
             else if (nparams < cmds[i].minparams)
             {
+                //There are commands that need to return erros more specific than ERR_NEEDMOREPARAMS
+                //NICK: ERR_NONICKNAMEGIVEN
+                //PRIVMSG: ERR_NORECIPIENT, ERR_NOTEXTTOSEND
+                if (!strcasecmp(command, "NICK") || !strcasecmp(command, "PRIVMSG")) {
+                    //ignore minparams restriction and pass down to command handlers
+                    (*cmds[i].handler)(server_info, cli, params, nparams);
+                }
+
                 // ERROR - the client didn't specify enough parameters for this command
                 WRITE(cli->sock,
                       ":%s %d %s %s :Not enough parameters\r\n",
@@ -345,12 +354,23 @@ void motd(int sock, char* hostname)
  */
 void cmdNick(CMD_ARGS)
 {
+    //if nparmas = 0, reply ERR_NONICKNAMEGIVEN
+    if (!nparams) {
+        WRITE(cli->sock,
+              ":%s %d %s :No nickname given\r\n",
+              server_info->hostname,
+              ERR_NONICKNAMEGIVEN,
+              *cli->nick? cli->nick: "*");
+        return;
+    }
+
     char* nick = params[0];
     char nick_buf[RFC_MAX_NICKNAME+1];
     nick_buf[RFC_MAX_NICKNAME] = '\0';
     strncpy(nick_buf, nick, RFC_MAX_NICKNAME);
     size_t nick_len = strlen(nick_buf);
     int nick_valid = is_nickname_valid(nick, nick_len);
+
     if (!nick_valid)
     {
         WRITE(cli->sock,
@@ -433,7 +453,7 @@ void cmdUser(CMD_ARGS){
               ":%s %d %s :You may not reregister\r\n",
               server_info->hostname,
               ERR_ALREADYREGISTRED,
-              cli->nick);
+              *cli->nick? cli->nick: "*");
     }
 
     // Update user information
@@ -490,7 +510,7 @@ void cmdQuit(CMD_ARGS)
                 if (!nparams)
                 {
                     WRITE(other->sock,
-                          ":%s!%s@%s QUIT :Connection closed",
+                          ":%s!%s@%s QUIT :Connection closed\r\n",
                           cli->nick,
                           cli->user,
                           cli->hostname);
@@ -499,7 +519,7 @@ void cmdQuit(CMD_ARGS)
                 else
                 {
                     WRITE(cli->sock,
-                          ":%s!%s@%s QUIT :%s",
+                          ":%s!%s@%s QUIT :%s\r\n",
                           cli->nick,
                           cli->user,
                           cli->hostname,
@@ -540,9 +560,95 @@ void cmdList(CMD_ARGS)
 
 void cmdPmsg(CMD_ARGS)
 {
-    //ERR_NORECIPIENT ":No recipient given (<command>)"
+    //server_info_t* server_info, client_t* cli, char **params, int nparams
+    //<target>{,<target>} <text to be sent>
+    //ERR_NORECIPIENT
     //ERR_NOTEXTTOSEND
-    //ERR_CAN
+    //ERR_NOSUCHNICK (when cannot find nick/channame?)
+
+    //Since there is no way to tell between target and text_to_send
+    //if nparams == 0 then reply ERR_NORECIPIENT
+    //if nparams == 1 then reply ERR_NOTEXTTOSEND
+    if (!nparams) {
+        WRITE(cli->sock,
+              ":%s %d %s :No recipient given (PRIVMSG)\r\n",
+              server_info->hostname,
+              ERR_NORECIPIENT,
+              cli->nick);
+        return;
+    } else if (nparams == 1) {
+        WRITE(cli->sock,
+              ":%s %d %s :No text to send\r\n",
+              server_info->hostname,
+              ERR_NOTEXTTOSEND,
+              cli->nick);
+        return;
+    }
+
+    //parsing targets by ","
+  	char *target = strtok(strdup(params[0]), ",");
+    while(target) {
+
+      //is target a client?
+      Iterator_LinkedList* c;
+      for (c = iter(server_info->clients); !iter_empty(c); c = iter_next(c)) {
+
+          client_t* sendTo = (client_t *) iter_get(c);
+          if (strcmp(target, sendTo->nick)) {
+              //yes, target is a client
+              //send to the client
+              WRITE(sendTo->sock,
+                    ":%s!%s@%s :%s\r\n",
+                    sendTo->nick,
+                    sendTo->user,
+                    sendTo->hostname,
+                    params[1]);
+              break;
+          }
+      }
+      iter_clean(c);
+
+      //is target a channel?
+      Iterator_LinkedList* ch;
+      for (ch = iter(server_info->channels); !iter_empty(ch); ch = iter_next(ch)) {
+
+          channel_t* sendTo = (channel_t *) iter_get(ch);
+          if (strcmp(target, sendTo->name)) {
+              //yes, target is a channel
+              //send to every member except the sender client
+              Iterator_LinkedList* m;
+              for (m = iter(sendTo->members); !iter_empty(m); m = iter_next(m)) {
+
+                  client_t* other = (client_t *) iter_get(m);
+                  if (cli == other) {
+                      continue;
+                  } else {
+                      WRITE(other->sock,
+                            ":%s!%s@%s :%s\r\n",
+                            other->nick,
+                            other->user,
+                            other->hostname,
+                            params[1]);
+                  }
+              }
+              iter_clean(m);
+              break;
+          }
+      }
+      iter_clean(ch);
+
+      //this target is neither a client nor a channel, return ERR_NOSUCHNICK
+      //FIX: print two nicks? ---------------------------------------------------------------------------------------------------------------------------------------
+      WRITE(cli->sock,
+            ":%s %d %s %s :No such nick/channel\r\n",
+            server_info->hostname,
+            ERR_NOSUCHNICK,
+            cli->nick,
+            cli->nick);
+
+      //go to next target
+      target = strtok(NULL, ",");
+    }
 }
 
 void cmdWho(CMD_ARGS)
