@@ -11,6 +11,7 @@
 #include <fcntl.h>      // fcntl()
 #include <errno.h>      // errno
 #include <sys/select.h> // select(), fd_set, etc.
+#include <signal.h>
 
 #include "sircs.h"
 #include "debug.h"
@@ -25,7 +26,12 @@ void usage() {
 
 
 int main(int argc, char *argv[] ){
+    
+    signal(SIGPIPE, SIG_IGN); /* Block SIGPIPE Signals */
+    
     DPRINTF(DEBUG_INIT, "Hello\n");
+    
+    // Parse args
     extern char *optarg;
     extern int optind;
     int ch;
@@ -51,7 +57,7 @@ int main(int argc, char *argv[] ){
     char *endArg0Ptr;
     unsigned long portLong = strtoul(argv[0], &endArg0Ptr, 0);
     
-    // port check: no conversion at all, extra junk at the end, out of range
+    // Port check: no conversion at all, extra junk at the end, out of range
     if (argv[0] == endArg0Ptr || *endArg0Ptr != '\0' ||
         portLong < 1024 || portLong > 65535){
         fprintf(stderr,
@@ -161,8 +167,7 @@ int main(int argc, char *argv[] ){
                         if (__rc < 0)
                         {
                             DPRINTF(DEBUG_CLIENTS, "Client fd=%i closed the connection.\n", sock);
-                            iter_drop(it);
-                            // FIXME: remove channel if necessary
+                            handleLine("QUIT", &server_info, cli);
                         }
                     }
                 }

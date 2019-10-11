@@ -442,7 +442,7 @@ void echo_message(server_info_t* server_info,
     if (cli->channel)
     {
         // Retrieve args after |format|
-        va_list args;
+        va_list args, args_copy;
         va_start(args, format);
 
         // Loop through members from the client's channel
@@ -451,11 +451,17 @@ void echo_message(server_info_t* server_info,
             client_t* other = (client_t *) iter_get(it);
             // Echo message
             if (other != cli || echo_to_themselves)
+            {
+                va_copy(args_copy, args);
                 VWRITE(other->sock, format, args);
+                va_copy(args, args_copy);
+            }
+
         } /* Iterator loop */
         iter_clean(it);
 
         va_end(args); // Clean va_list
+        va_end(args_copy);
     }
     // Else, the client isn't any channel.
 }
@@ -915,52 +921,85 @@ void cmdPmsg(CMD_ARGS)
  */
 void cmdWho(CMD_ARGS)
 {
-
-    char* item_start = params[0]; // Start of possilby a list
-    char* item_end;
-    do
+    // No <name> is given, so return all visible users
+    // As per RFC:
+    // In the absence of the <name> parameter, all visible (users who aren't invisible (user mode +i)
+    // and who don't have a common channel with the requesting client) are listed
+    if (!nparams)
     {
-        item_end = strchr(item_start, ',');
-        if (item_end)
-            *item_end = '\0';
-        GET_SAFE_NAME(safe_query, item_start);
-
-
-        channel_t* ch_match = find_channel_by_name(server_info, safe_query);
-        // As per RFC annotation:
-        // Your server should match <name> against channel name only
-        if (ch_match)
+        ITER_LOOP(it, server_info->clients)
         {
-            // Loop through all members of that channel
-            ITER_LOOP(it_cli, ch_match->members)
+            client_t* other = iter_get(it);
+            if (cli->channel && other->channel && other->channel != cli->channel)
             {
-                client_t* other = (client_t *) iter_get(it_cli);
                 // RFC: <channel> <user> <host> <server> <nick> <H|G>[*][@|+] :<hopcount> <real name>
                 WRITE(cli->sock,
                       "%s %d %s %s %s %s %s %s H :0 %s :End of /WHO list\r\n",
                       server_info->hostname, RPL_WHOREPLY, cli->nick,
-                      ch_match->name,
+                      other->channel->name,
                       other->user,
                       other->hostname,
                       server_info->hostname,
                       other->nick,
                       other->realname
                       );
-            } /* Iterator loop */
-            iter_clean(it_cli);
+            }
+            WRITE(cli->sock,
+                  "%s %d %s * :End of /WHO list\r\n",
+                  server_info->hostname,
+                  RPL_ENDOFWHO,
+                  cli->nick);
         }
+        iter_clean(it);
+    }
+    else
+    {
+        char* item_start = params[0]; // Start of possilby a list
+        char* item_end;
+        do
+        {
+            item_end = strchr(item_start, ',');
+            if (item_end)
+                *item_end = '\0';
+            GET_SAFE_NAME(safe_query, item_start);
 
-        // CHOICE: if |safe_query| doesn't match any channel, fall through
 
-        WRITE(cli->sock,
-              "%s %d %s %s :End of /WHO list\r\n",
-              server_info->hostname,
-              RPL_ENDOFWHO,
-              cli->nick,
-              safe_query);
+            channel_t* ch_match = find_channel_by_name(server_info, safe_query);
+            // As per RFC annotation:
+            // Your server should match <name> against channel name only
+            if (ch_match)
+            {
+                // Loop through all members of that channel
+                ITER_LOOP(it_cli, ch_match->members)
+                {
+                    client_t* other = (client_t *) iter_get(it_cli);
+                    // RFC: <channel> <user> <host> <server> <nick> <H|G>[*][@|+] :<hopcount> <real name>
+                    WRITE(cli->sock,
+                          "%s %d %s %s %s %s %s %s H :0 %s :End of /WHO list\r\n",
+                          server_info->hostname, RPL_WHOREPLY, cli->nick,
+                          ch_match->name,
+                          other->user,
+                          other->hostname,
+                          server_info->hostname,
+                          other->nick,
+                          other->realname
+                          );
+                } /* Iterator loop */
+                iter_clean(it_cli);
+            }
 
-        if (item_end)
-            item_start = item_end + 1;
+            // CHOICE: if |safe_query| doesn't match any channel, fall through
 
-    } while (item_end);
+            WRITE(cli->sock,
+                  "%s %d %s %s :End of /WHO list\r\n",
+                  server_info->hostname,
+                  RPL_ENDOFWHO,
+                  cli->nick,
+                  safe_query);
+
+            if (item_end)
+                item_start = item_end + 1;
+
+        } while (item_end);
+    }
 }
