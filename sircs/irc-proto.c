@@ -27,6 +27,7 @@ typedef void (*cmd_handler_t)(CMD_ARGS);
 
 // Server reply macro
 #define WRITE(sock, fmt, ...) do { dprintf(sock, fmt, ##__VA_ARGS__); } while (0)
+#define VWRITE(sock, fmt, va) do { vdprintf(sock, fmt, va); } while (0)
 #define GET_SAFE_NAME(safe_name, unsafe_name) \
 char safe_name[RFC_MAX_NICKNAME+1]; \
 safe_name[RFC_MAX_NICKNAME] = '\0'; \
@@ -378,58 +379,85 @@ void motd(int sock, char* hostname)
 
 
 /**
- * Remove an empty channel.
+ * Remove a channel if it is empty.
  */
-void remove_empty_channel(server_info_t* server_info, channel_t* ch)
+void remove_channel_if_empty(server_info_t* server_info, channel_t* ch)
 {
-    assert(ch->members->size == 0);
-    drop_item(server_info->channels, ch);
-    free(ch->members);
-    free(ch);
+    if (ch->members->size == 0)
+    {
+        drop_item(server_info->channels, ch);
+        free(ch->members);
+        free(ch);
+    }
 }
 
 
 /**
- * Build a multi-segment message that may exceed size limit. If so, the message
- * is split into multiple messages sharing a common prefix string, and they are
- * sent individually.
- *
- * The message must look like:
- *     <common> <segment> {<separator> <segment>} <CR-LF>
+ * Remove a client from a channel.
  */
-void build_and_send_message(int   sock,
-                            char* buf,       size_t buf_max,
-                            char* common,    size_t common_len,
-                            char* segment,   size_t segment_len,
-                            char* separator)
+void remove_client_from_channel(server_info_t* server_info, client_t* cli, channel_t* ch)
 {
-    size_t buf_size = strlen(buf);
-    // Buffer already contains some segments,
-    if (buf_size > 0)
+    if (cli->channel && cli->channel == ch)
     {
-        // Nothing more to build, so send everything we have
-        if (!segment)
-        {
-            WRITE(sock, "%s\r\n", buf);
-            return;
-        }
-        // Safe to append this new segment
-        else if (buf_size + segment_len + 2 < buf_max) // 2 for "\r\n"
-        {
-            sprintf(buf + buf_size, "%s%s", separator, segment);
-            return;
-        }
-        // Appending this new segment would exceed the limit
-        // => send everything we have, and store the new segment on an empty buffer (fall through)
-        else
-        {
-            WRITE(sock, "%s\r\n", buf);
-        }
+        // Remove client from the channel member list
+        drop_item(cli->channel->members, cli);
 
+        // Remove channel if it becomes empty
+        remove_channel_if_empty(server_info, cli->channel);
+
+        // Set client channel to NULL
+        cli->channel= NULL;
     }
-    // Empty buffer
-    memset(buf, '\0', buf_max);
-    sprintf(buf, "%s%s", common, segment);
+}
+
+
+/**
+ * Find a channel by name.
+ */
+channel_t* find_channel_by_name(server_info_t* server_info, char* target_name)
+{
+    ITER_LOOP(it, server_info->channels)
+    {
+        channel_t* ch = (channel_t *) iter_get(it);
+        if ( !strncmp(target_name, ch->name, RFC_MAX_NICKNAME+1) )
+        {
+            return ch;
+        }
+    } /* Iterator loop */
+    iter_clean(it);
+    return NULL;
+}
+
+
+
+/**
+ * Echo a message to all members in the client's channel (if any),
+ * including the client him/herself if |echo_to_themselves| is set to TRUE.
+ */
+void echo_message(server_info_t* server_info,
+                  client_t*      cli,
+                  int            echo_to_themselves,
+                  const char* restrict format, ...)
+{
+    if (cli->channel)
+    {
+        // Retrieve args after |format|
+        va_list args;
+        va_start(args, format);
+
+        // Loop through members from the client's channel
+        ITER_LOOP(it, cli->channel->members)
+        {
+            client_t* other = (client_t *) iter_get(it);
+            // Echo message
+            if (other != cli || echo_to_themselves)
+                VWRITE(other->sock, format, args);
+        } /* Iterator loop */
+        iter_clean(it);
+
+        va_end(args); // Clean va_list
+    }
+    // Else, the client isn't any channel.
 }
 
 
@@ -471,8 +499,7 @@ void cmdNick(CMD_ARGS)
     else /* nick valid */
     {
         // Check for nickname collision
-        Iterator_LinkedList* it;
-        for (it = iter(server_info->clients); !iter_empty(it); iter_next(it))
+        ITER_LOOP(it, server_info->clients)
         {
             client_t* other = (client_t *) iter_get(it);
             if (cli == other) continue;
@@ -505,8 +532,7 @@ void cmdNick(CMD_ARGS)
         // => Echo NICK to everyone else in the same channel
         if (cli->channel)
         {
-            Iterator_LinkedList* it;
-            for (it = iter(cli->channel->members); !iter_empty(it); iter_next(it))
+            ITER_LOOP(it, cli->channel->members)
             {
                 client_t* other = (client_t *) iter_get(it);
                 if (cli == other) continue;
@@ -533,6 +559,9 @@ void cmdNick(CMD_ARGS)
 
 
 
+/**
+ * Command USER
+ */
 void cmdUser(CMD_ARGS){
     // ERROR - already registered
     if (cli->registered)
@@ -564,72 +593,34 @@ void cmdUser(CMD_ARGS){
 
 
 
+/**
+ * Command QUIT
+ */
 void cmdQuit(CMD_ARGS)
 {
-    // Close the connection
-    close(cli->sock);
+    echo_message(server_info, cli, FALSE,
+                 ":%s!%s@%s QUIT :Connection closed\r\n",
+                 cli->nick,
+                 cli->user,
+                 cli->hostname);
+
+    remove_client_from_channel(server_info, cli, cli->channel);
 
     // Remove client from the server's client list
     // (Junrui) FIXME: This iterates over the whole list and defeats the purpose?
     drop_item(server_info->clients, cli);
 
-    // If the client has joined a channel, then we need to
-    //   1. Remove her from the member list
-    //   2. Echo QUIT to other members, if any
-    //   3. If the departing client is the last one in the channel,
-    //      then the channel is removed
-    if (cli->channel)
-    {
-        channel_t* prev_ch = cli->channel;
-        // Loop through members from the client's channel
-        Iterator_LinkedList* it;
-        for (it = iter(cli->channel->members);
-             !iter_empty(it);
-             iter_next(it))
-        {
-            client_t* other = (client_t *) iter_get(it);
+    // Close the connection
+    close(cli->sock);
 
-            // Client herself => Remove client from the channel member list
-            if (cli == other)
-            {
-                iter_drop(it);
-                cli->channel = NULL;
-            }
-
-            // Someone else => Echo quit message
-            else
-            {
-                // Client did not specify the farewell message => Use default
-                if (!nparams)
-                {
-                    WRITE(other->sock,
-                          ":%s!%s@%s QUIT :Connection closed\r\n",
-                          cli->nick,
-                          cli->user,
-                          cli->hostname);
-                }
-                // Client has specified farewell message
-                else
-                {
-                    WRITE(cli->sock,
-                          ":%s!%s@%s QUIT :%s\r\n",
-                          cli->nick,
-                          cli->user,
-                          cli->hostname,
-                          params[0]);
-                }
-            }
-        } /* Iterator loop */
-        iter_clean(it);
-
-        if (prev_ch->members == 0)
-            remove_empty_channel(server_info, prev_ch);
-    } /* if (cli->channel) */
     free(cli);
 }
 
 
 
+/**
+ * Command JOIN
+ */
 void cmdJoin(CMD_ARGS)
 {
     char* channel_to_join = params[0];
@@ -651,53 +642,22 @@ void cmdJoin(CMD_ARGS)
     }
     else /* Channel name valid */
     {
-        // Find the channel the client wishes to join
-        channel_t* ch_found = NULL;
-        Iterator_LinkedList* it;
-        for (it = iter(server_info->channels);
-             !iter_empty(it);
-             iter_next(it))
-        {
-            channel_t* ch = (channel_t *) iter_get(it);
-            if ( !strncmp(channel_to_join, ch->name, RFC_MAX_NICKNAME+1) )
-            {
-                ch_found = ch;
-                break;
-            }
-        } /* Iterator loop */
-        iter_clean(it);
+        channel_t* ch_found = find_channel_by_name(server_info, channel_to_join);
 
-        if (cli->channel) /* Client was previously in a channel */
+        if (cli->channel) // Client was previously in a channel
         {
             // Join a channel of which the client is already a member => Do nothing
             if ( ch_found && !strcmp(cli->channel->name, ch_found->name) ) return;
 
             // Echo QUIT to members of the previous channel
-            channel_t* prev_ch = cli->channel;
-            Iterator_LinkedList* it;
-            for (it = iter(prev_ch->members); !iter_empty(it); iter_next(it))
-            {
-                client_t* other = (client_t *) iter_get(it);
-                if (other == cli)
-                {
-                    iter_drop(it);
-                    cli->channel = NULL;
-                }
-                else
-                {
-                    WRITE(other->sock,
-                          ":%s!%s@%s QUIT\r\n",
-                          cli->nick,
-                          cli->user,
-                          cli->hostname);
-                }
-            } /* Iterator loop */
-            iter_clean(it);
+            echo_message(server_info, cli, FALSE,
+                         ":%s!%s@%s QUIT :Client left channel\r\n",
+                         cli->nick,
+                         cli->user,
+                         cli->hostname);
 
-            // Remove the channel if it becomes empty
-            if (prev_ch->members->size == 0)
-                remove_empty_channel(server_info, prev_ch);
-        } /* Client was previously in a channel */
+            remove_client_from_channel(server_info, cli, cli->channel);
+        }
 
         // Client is no longer in any channel by this point
 
@@ -717,39 +677,18 @@ void cmdJoin(CMD_ARGS)
         add_item(ch_found->members, cli); // Add client to the member list
         cli->channel = ch_found;
 
-        // Building RPL_NAMREPLY message(s)
-        //        char common[RFC_MAX_MSG_LEN+1];
-        //        sprintf(common,
-        //                ":%s %d %s = %s :",
-        //                server_info->hostname,
-        //                RPL_NAMREPLY,
-        //                cli->nick,
-        //                ch_found->name);
-        //        size_t common_len = strlen(common);
-        //        char build_buf[RFC_MAX_MSG_LEN+1];
+        // ECHO - JOIN to all members, including the newly joined client
+        echo_message(server_info, cli, TRUE,
+                     ":%s!%s@%s JOIN %s\r\n",
+                     cli->nick,
+                     cli->user,
+                     cli->hostname,
+                     ch_found->name);
 
-        for (it = iter(ch_found->members); !iter_empty(it); iter_next(it))
+        // REPLY - Send the list of channel members
+        ITER_LOOP(jt, ch_found->members)
         {
-            client_t* other = (client_t *) iter_get(it);
-
-            // ECHO - JOIN to all members, including the newly joined client
-            WRITE(other->sock,
-                  ":%s!%s@%s JOIN %s\r\n",
-                  cli->nick,
-                  cli->user,
-                  cli->hostname,
-                  ch_found->name);
-
-            // REPLY - Send channel members to the newly joined client
-            // Since there may be too many nicknames in the channel to fit into a single message,
-            // we build smaller messages, and send them out individually.
-            // From RFC: <=|@> <channel> :[[@|+]<nick> [[@|+]<nick> [...]]]
-            //
-            //            build_and_send_message(cli->sock,
-            //                                   build_buf,   RFC_MAX_MSG_LEN+1,
-            //                                   common,      common_len,
-            //                                   other->nick, strlen(other->nick),
-            //                                   " ");
+            client_t* other = (client_t *) iter_get(jt);
 
             WRITE(cli->sock,
                   ":%s %d %s = %s :%s\r\n",
@@ -759,24 +698,24 @@ void cmdJoin(CMD_ARGS)
                   ch_found->name,
                   other->nick);
         } /* Iterator loop */
-        iter_clean(it);
-        //        build_and_send_message(cli->sock,
-        //                              build_buf,   RFC_MAX_MSG_LEN+1,
-        //                              common,      common_len,
-        //                              "", 0,
-        //                              " ");
+        iter_clean(jt);
 
+        // REPLY - End
         WRITE(cli->sock,
-              ":%s %d %s %s :End of /NAMES list\r\n", // FIXME: explanation not helpful
+              ":%s %d %s %s :End of channel members\r\n",
               server_info->hostname,
               RPL_ENDOFNAMES,
               cli->nick,
               ch_found->name);
+
     } /* Channel name valid */
 }
 
 
 
+/**
+ * Command PART
+ */
 void cmdPart(CMD_ARGS)
 {
     char* channel_to_part = params[0];
@@ -787,18 +726,7 @@ void cmdPart(CMD_ARGS)
         *comma = '\0'; // Replace ',' with '\0' to take only the first target
 
     // Find the channel the client wishes to part
-    channel_t* ch_found = NULL;
-    Iterator_LinkedList* it;
-    for (it = iter(server_info->channels); !iter_empty(it); iter_next(it))
-    {
-        channel_t* ch = (channel_t *) iter_get(it);
-        if (!strncmp(ch->name, channel_to_part, RFC_MAX_NICKNAME+1))
-        {
-            ch_found = ch;
-            break;
-        }
-    } /* Iterator loop */
-    iter_clean(it);
+    channel_t* ch_found = find_channel_by_name(server_info, channel_to_part);
 
     if (!ch_found) // ERROR - No such channel
     {
@@ -821,38 +749,23 @@ void cmdPart(CMD_ARGS)
     }
     else // Client is indeed in the channel to part
     {
-        // Echo
-        Iterator_LinkedList* it;
-        for (it = iter(ch_found->members); !iter_empty(it); iter_next(it))
-        {
-            client_t* other = (client_t *) iter_get(it);
+        echo_message(server_info, cli, TRUE,
+                     ":%s!%s@%s PART %s\r\n",
+                     cli->nick,
+                     cli->user,
+                     cli->hostname,
+                     cli->channel->name);
 
-            // ECHO - PART to every one on the same channel (CHOICE: including the parting client)
-            WRITE(other->sock,
-                  ":%s!%s@%s PART %s\r\n",
-                  cli->nick,
-                  cli->user,
-                  cli->hostname,
-                  ch_found->name);
-
-            // FIXME: RFC requires that echoing must be done before a client is removed (CHOICE: which we have not implemented here). Why?
-            if (other == cli)
-            {
-                iter_drop(it);
-                cli->channel = NULL;
-            }
-        } /* Iterator loop */
-        iter_clean(it);
-
-        // Remove the channel if it is empty
-        if (ch_found->members->size == 0)
-            remove_empty_channel(server_info, ch_found);
+        remove_client_from_channel(server_info, cli, cli->channel);
     }
 
 }
 
 
 
+/**
+ * Command LIST
+ */
 void cmdList(CMD_ARGS)
 {
     WRITE(cli->sock,
@@ -861,8 +774,7 @@ void cmdList(CMD_ARGS)
           RPL_LISTSTART,
           cli->nick);
 
-    Iterator_LinkedList* it;
-    for (it = iter(server_info->channels); !iter_empty(it); iter_next(it))
+    ITER_LOOP(it, server_info->channels)
     {
         channel_t* ch = (channel_t *) iter_get(it);
         WRITE(cli->sock,
@@ -884,6 +796,9 @@ void cmdList(CMD_ARGS)
 
 
 
+/**
+ * Command PRIVMSG
+ */
 void cmdPmsg(CMD_ARGS)
 {
     //server_info_t* server_info, client_t* cli, char **params, int nparams
@@ -995,8 +910,12 @@ void cmdPmsg(CMD_ARGS)
 
 
 
+/**
+ * Command WHO
+ */
 void cmdWho(CMD_ARGS)
 {
+
     char* item_start = params[0]; // Start of possilby a list
     char* item_end;
     do
@@ -1006,34 +925,32 @@ void cmdWho(CMD_ARGS)
             *item_end = '\0';
         GET_SAFE_NAME(safe_query, item_start);
 
-        // Loop through all channels
-        Iterator_LinkedList* it_ch;
-        for (it_ch = iter(server_info->channels); !iter_empty(it_ch); iter_next(it_ch))
+
+        channel_t* ch_match = find_channel_by_name(server_info, safe_query);
+        // As per RFC annotation:
+        // Your server should match <name> against channel name only
+        if (ch_match)
         {
-            channel_t* channel = (channel_t *) iter_get(it_ch);
-            if (!strcmp(channel->name, safe_query)) // Channel name matches
+            // Loop through all members of that channel
+            ITER_LOOP(it_cli, ch_match->members)
             {
-                // Loop through all members of that channel
-                Iterator_LinkedList* it_cli;
-                for (it_cli = iter(channel->members); !iter_empty(it_cli); iter_next(it_cli))
-                {
-                    client_t* other = (client_t *) iter_get(it_cli);
-                    // RFC: <channel> <user> <host> <server> <nick> <H|G>[*][@|+] :<hopcount> <real name>
-                    WRITE(cli->sock,
-                          "%s %d %s %s %s %s %s %s H :0 %s :End of /WHO list\r\n",
-                          server_info->hostname, RPL_WHOREPLY, cli->nick,
-                          channel->name,
-                          other->user,
-                          other->hostname,
-                          server_info->hostname,
-                          other->nick,
-                          other->realname
-                          );
-                } /* Iterator loop */
-                iter_clean(it_cli);
-            }
-        } /* Iterator loop */
-        iter_clean(it_ch);
+                client_t* other = (client_t *) iter_get(it_cli);
+                // RFC: <channel> <user> <host> <server> <nick> <H|G>[*][@|+] :<hopcount> <real name>
+                WRITE(cli->sock,
+                      "%s %d %s %s %s %s %s %s H :0 %s :End of /WHO list\r\n",
+                      server_info->hostname, RPL_WHOREPLY, cli->nick,
+                      ch_match->name,
+                      other->user,
+                      other->hostname,
+                      server_info->hostname,
+                      other->nick,
+                      other->realname
+                      );
+            } /* Iterator loop */
+            iter_clean(it_cli);
+        }
+
+        // CHOICE: if |safe_query| doesn't match any channel, fall through
 
         WRITE(cli->sock,
               "%s %d %s %s :End of /WHO list\r\n",
