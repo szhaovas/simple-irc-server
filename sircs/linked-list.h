@@ -70,6 +70,10 @@ Node* iter_add(Iterator_LinkedList* it, void* data);
 
 void* iter_drop(Iterator_LinkedList* it);
 
+#define ITER_LOOP(it, list) \
+    Iterator_LinkedList* it; \
+    for (it = iter(list); !iter_empty(it); iter_next(it))
+
 
 #endif /* _LINKED_LIST_H_ */
 

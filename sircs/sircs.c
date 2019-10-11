@@ -147,8 +147,7 @@ int main(int argc, char *argv[] ){
                 handle_new_connection(listenfd, server_info.clients);
             }
             // Check activities from connected sockets
-            Iterator_LinkedList* it;
-            for (it = iter(server_info.clients); !iter_empty(it); iter_next(it))
+            ITER_LOOP(it, server_info.clients)
             {
                 client_t* cli = (client_t *) iter_get(it);
                 {
@@ -187,8 +186,7 @@ int build_fd_set(fd_set *fds, int listenfd, LinkedList* clients)
     FD_ZERO(fds);
     FD_SET(listenfd, fds);
     // update highfd
-    Iterator_LinkedList* it;
-    for (it = iter(clients); !iter_empty(it); iter_next(it))
+    ITER_LOOP(it, clients)
     {
         client_t* cli = (client_t *) iter_get(it);
         int fd = cli->sock;

@@ -47,9 +47,6 @@ struct __client_struct {
 
 
 
-
-
-
 int build_fd_set(fd_set* fds, int listenfd, LinkedList* clients);
 
 int set_non_blocking(int fd);
