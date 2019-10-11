@@ -346,6 +346,61 @@ void motd(int sock, char* hostname)
 }
 
 
+/**
+ * Remove an empty channel.
+ */
+void remove_empty_channel(server_info_t* server_info, channel_t* ch)
+{
+    assert(ch->members->size == 0);
+    drop_item(server_info->channels, ch);
+    free(ch->members);
+    free(ch);
+}
+
+
+/**
+ * Build a multi-segment message that may exceed size limit. If so, the message
+ * is split into multiple messages sharing a common prefix string, and they are
+ * sent individually.
+ *
+ * The message must look like:
+ *     <common> <segment> {<separator> <segment>} <CR-LF>
+ */
+void build_and_send_message(int   sock,
+                            char* buf,       size_t buf_max,
+                            char* common,    size_t common_len,
+                            char* segment,   size_t segment_len,
+                            char* separator)
+{
+    size_t buf_size = strlen(buf);
+    // Buffer already contains some segments,
+    if (buf_size > 0)
+    {
+        // Nothing more to build, so send everything we have
+        if (!segment)
+        {
+            WRITE(sock, "%s\r\n", buf);
+            return;
+        }
+        // Safe to append this new segment
+        else if (buf_size + segment_len + 2 < buf_max) // 2 for "\r\n"
+        {
+            sprintf(buf + buf_size, "%s%s", separator, segment);
+            return;
+        }
+        // Appending this new segment would exceed the limit
+        // => send everything we have, and store the new segment on an empty buffer (fall through)
+        else
+        {
+            WRITE(sock, "%s\r\n", buf);
+        }
+
+    }
+    // Empty buffer
+    memset(buf, '\0', buf_max);
+    sprintf(buf, "%s%s", common, segment);
+}
+
 
 /* Command handlers */
 
@@ -389,8 +444,8 @@ void cmdNick(CMD_ARGS)
             client_t* other = (client_t *) iter_get(it);
             if (cli == other) continue;
             if (*other->nick && // Note: we should not check |registered| here,
-                                // because two unregistered clients may still have colliding nicknames
-                check_collision(nick_len, nick_buf, other->nick))
+                // because two unregistered clients may still have colliding nicknames
+                check_collision(nick, other->nick))
             {
                 WRITE(cli->sock,
                       ":%s %d %s %s :Nickname is already in use\r\n",
@@ -542,21 +597,98 @@ void cmdQuit(CMD_ARGS)
 
 void cmdJoin(CMD_ARGS)
 {
-    /* do something */
+    // Junrui.1: you should verify that the channel name specified by the client is valid
+    // Never, ever, trust a client. All clients are evil.
+    // Just use is_channel_name_valid() which I have written
 
+    // Junrui.2: the channel the client requests to join may be non-existent.
+    // As per RFC, you should send an error reply
+
+
+    if (strcmp(params[0], cli->channel->name)) // if user's channel same as param
+        // Junrui.1: Should be !strcmp
+        // Junrui.2: cli->channel may be NULL (client may not have joined a channel yet). This will cause seg fault.
+        // Junrui.3: Use strncmp if you cann't guarantee the safety of the parameter strings (in this case the string was supplied by the client, hence unsafe)
+        return; // ignore
+
+    else if (cli->channel) // already has channel
+    {
+        //       cmdPart(CMD_ARGS);   // parts current channel
+        // Junrui.1: this isn't quite how CMD_ARGS is supposed to used
+        // Junrui.2: According to Rui's email, we might want to echo QUIT here, instaed of PART
+
+        // check if channel exists
+        for (Iterator_LinkedList* it = iter(server_info->channels);
+             !iter_empty(it);
+             it = iter_next(it))
+        {
+            channel_t* ch = (channel_t *) iter_get(it);
+            if (strcmp(params[0], ch->name)) // channel found
+                // Junrui: Should be !strcmp
+            {
+                add_item(ch->members, cli); // add cli to list of members in channel
+                cli->channel = ch; // make client's channel
+            }
+        }
+        // Junrui: please call iter_clean(it) after you're done
+
+        //when channel doesn't exist
+        // Junrui: we don't know if a channel exists or not at this point
+        // If it exists, then the code below will also be executed, which is not what you want
+        // Idea: put a flag to indicate if a channel match is found
+
+        channel_t* chan = malloc(sizeof(channel_t)); // create new requested channel
+
+        strcpy(chan->name, params[0]);
+
+        // Junrui: you have not initialized the |member| linked list yet (simply do a malloc).
+        add_item(chan->members, cli); // channels first member as the user
+        add_item(server_info->channels, chan);    // add new channel to list of channels
+        cli->channel = chan;              // client's channel as the channel created
+        // Junrui: Bug: the client may be added twice. Try to figure out why.
+
+    }
+    // Junrui: we may want to handle the else branch here (client doesn't already have a channel)
+
+    /* Junrui: Several things that I see missing:
+        1. If a client was the only member in his/her previous channel,
+           then that channel should be removed.
+        2. As per RFC, the JOIN should be echoed to all members of the newly joined channel
+        3. As per RFC, the server should send the list of channel members to the client
+     */
 }
+
 
 void cmdPart(CMD_ARGS)
 {
-    /* do something */
+    char quit_msg[RFC_MAX_MSG_LEN]; // create quit msg buf
+    sprintf(quit_msg, ":%s!%s@%s QUIT",
+            cli->nick, cli->user, cli->hostname); // send quit msg
+    // Junrui: why echoing QUIT back to the client?
 
+    // remove client from channel members
+    for (Iterator_LinkedList* it = iter(cli->channel->members);
+         !iter_empty(it);
+         it = iter_next(it))
+    {
+        client_t* other = (client_t *) iter_get(it);
+        if (cli == other)
+            iter_drop(it);
+        else
+            // Junrui: should echo PART, not QUIT
+            write(other->sock, quit_msg, strlen(quit_msg)+1); // quit msg to all other users
+    }
+    // Junrui: please call iter_clean(it) after you're done
+
+    /* Junrui: Things that I see missing:
+     1. If a client was the only member in his/her previous channel,
+     then that channel should be removed.
+     2. You should check for ERR_NOSUCHCHANNEL and ERR_NOTONCHANNEL.
+     */
 }
 
-void cmdList(CMD_ARGS)
-{
-    /* do something */
 
-}
+
 
 void cmdPmsg(CMD_ARGS)
 {
