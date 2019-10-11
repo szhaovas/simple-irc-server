@@ -4,6 +4,7 @@
 #include "sircs.h"
 
 typedef enum {
+<<<<<<< HEAD
     ERR_INVALID = 1,
     ERR_NOSUCHNICK = 401, //"<nickname> :No such nick/channel"
                           //Used to indicate the nickname parameter supplied to a command is currently unused.
@@ -31,11 +32,27 @@ typedef enum {
                               //Returned by the server by numerous commands to indicate to the client that it didn't supply enough parameters.
     ERR_ALREADYREGISTRED = 462 //":You may not reregister"
                                //Returned by the server to any link which tries to change part of the registered details (such as password or user details from second USER message).
+=======
+    ERR_INVALID = 1, // ?
+    ERR_NOSUCHNICK = 401,
+    ERR_NOSUCHCHANNEL = 403,
+    ERR_NORECIPIENT = 411, // ?
+    ERR_NOTEXTTOSEND = 412, // ?
+    ERR_UNKNOWNCOMMAND = 421,
+    ERR_ERRONEOUSNICKNAME = 432,
+    ERR_NICKNAMEINUSE = 433,
+    ERR_NONICKNAMEGIVEN = 431, // ?
+    ERR_NOTONCHANNEL = 442,
+    ERR_NOLOGIN = 444, // Not used
+    ERR_NOTREGISTERED = 451,
+    ERR_NEEDMOREPARAMS = 461,
+    ERR_ALREADYREGISTRED = 462
+>>>>>>> origin/channel
 } err_t;
 
 typedef enum {
-    RPL_NONE = 300,
-    RPL_USERHOST = 302,
+    RPL_NONE = 300, // Not used
+    RPL_USERHOST = 302, // Not used
     RPL_LISTSTART = 321,
     RPL_LIST = 322,
     RPL_LISTEND = 323,

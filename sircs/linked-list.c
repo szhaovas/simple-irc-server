@@ -59,6 +59,25 @@ Node* add_item(LinkedList* list, void* data)
 }
 
 
+/**
+ * Find an item in a linked list.
+ */
+int find_item(LinkedList* list, void* data)
+{
+    Iterator_LinkedList* it;
+    for (it = iter(list); !iter_empty(it); iter_next(it))
+    {
+        if (iter_get(it) == data)
+        {
+            iter_clean(it);
+            return TRUE;
+        }
+    }
+    iter_clean(it);
+    return FALSE;
+}
+
+
 
 /**
  * Drop a node from a linked list.
@@ -162,14 +181,13 @@ void iter_clean(Iterator_LinkedList* it)
 
 
 /**
- * Get the next iterator.
+ * Advance the iterator.
  */
-Iterator_LinkedList* iter_next(Iterator_LinkedList* it)
+void iter_next(Iterator_LinkedList* it)
 {
     if (!it->incremented)
         get_and_incr(it);
     it->incremented = FALSE;
-    return it;
 }
 
 
@@ -208,9 +226,7 @@ void* iter_drop(Iterator_LinkedList* it)
 void drop_item(LinkedList* list, void* data)
 {
     Iterator_LinkedList* it;
-    for (it = iter(list);
-         !iter_empty(it);
-         it = iter_next(it))
+    for (it = iter(list); !iter_empty(it); iter_next(it))
     {
         if (iter_get(it) == data)
         {
