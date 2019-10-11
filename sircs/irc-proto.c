@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <ctype.h> // isalpha(), isdigit()
 #include <stdarg.h> // va_list, etc.
+#include <assert.h>
 
 #include "irc-proto.h"
 #include "sircs.h"
@@ -208,6 +209,7 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
                 if (!strcasecmp(command, "NICK") || !strcasecmp(command, "PRIVMSG")) {
                     //ignore minparams restriction and pass down to command handlers
                     (*cmds[i].handler)(server_info, cli, params, nparams);
+                    return;
                 }
 
                 // ERROR - the client didn't specify enough parameters for this command
@@ -238,6 +240,13 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
     }
 }
 
+/**
+ * Check if a character is a channel character.
+ *
+ * <chstring> ::=
+ *   <any 8bit code except SPACE, BELL, NUL, CR, LF and comma (',')>
+ */
+#define IS_CH_CHAR(c) (strchr(" \a\r\n,", c) == NULL)
 
 /**
  * Check if character |c| is a special character.
@@ -324,12 +333,12 @@ int equivalent_char(char a, char b)
 /**
  * Check if two nicknames |this| and |that| collide.
  */
-int check_collision(size_t this_len, char* this, char* that)
+int check_collision(char* this, char* that)
 {
-    for (int i = 0; i < this_len; i++)
+    for (int i = 0; i < RFC_MAX_NICKNAME; i++)
     {
         char ai = this[i], bi = that[i];
-        // Same length => same string
+        // Same length && equiv chars so far => same string
         if ( ai == '\0' && bi == '\0')
             return 1;
         // Different length
@@ -339,8 +348,7 @@ int check_collision(size_t this_len, char* this, char* that)
         else if ( !equivalent_char(ai, bi) )
             return 0;
     }
-    // Implies two strings have the same length and
-    // equivalent sequence of characters
+    // End of both strings => the same len and equiv chars
     return 1;
 }
 
@@ -904,65 +912,81 @@ void cmdPmsg(CMD_ARGS)
     }
 
     //parsing targets by ","
-  	char *target = strtok(strdup(params[0]), ",");
+    char *str = strdup(params[0]);
+  	char *target = strtok(str, ",");
     while(target) {
+      int is_valid_target = 0;
+
+      //if target is the sending client itself, ignore without replying error
+      if (!strcmp(target, cli->nick)) {
+          //go to next target
+          target = strtok(NULL, ",");
+          continue;
+      }
 
       //is target a client?
       Iterator_LinkedList* c;
-      for (c = iter(server_info->clients); !iter_empty(c); c = iter_next(c)) {
+      for (c = iter(server_info->clients); !iter_empty(c); iter_next(c)) {
 
           client_t* sendTo = (client_t *) iter_get(c);
-          if (strcmp(target, sendTo->nick)) {
+          if (!strcmp(target, sendTo->nick)) {
               //yes, target is a client
               //send to the client
               WRITE(sendTo->sock,
                     ":%s!%s@%s :%s\r\n",
-                    sendTo->nick,
-                    sendTo->user,
-                    sendTo->hostname,
+                    cli->nick,
+                    cli->user,
+                    cli->hostname,
                     params[1]);
+              is_valid_target = 1;
               break;
           }
       }
       iter_clean(c);
 
       //is target a channel?
-      Iterator_LinkedList* ch;
-      for (ch = iter(server_info->channels); !iter_empty(ch); ch = iter_next(ch)) {
+      //if target is a client, skip this part
+      if (!is_valid_target) {
+          Iterator_LinkedList* ch;
+          for (ch = iter(server_info->channels); !iter_empty(ch); iter_next(ch)) {
 
-          channel_t* sendTo = (channel_t *) iter_get(ch);
-          if (strcmp(target, sendTo->name)) {
-              //yes, target is a channel
-              //send to every member except the sender client
-              Iterator_LinkedList* m;
-              for (m = iter(sendTo->members); !iter_empty(m); m = iter_next(m)) {
+              channel_t* sendTo = (channel_t *) iter_get(ch);
+              if (!strcmp(target, sendTo->name)) {
+                  //yes, target is a channel
+                  //send to every member except the sender client
+                  Iterator_LinkedList* m;
+                  for (m = iter(sendTo->members); !iter_empty(m); iter_next(m)) {
 
-                  client_t* other = (client_t *) iter_get(m);
-                  if (cli == other) {
-                      continue;
-                  } else {
-                      WRITE(other->sock,
-                            ":%s!%s@%s :%s\r\n",
-                            other->nick,
-                            other->user,
-                            other->hostname,
-                            params[1]);
+                      client_t* other = (client_t *) iter_get(m);
+                      if (cli == other) {
+                          continue;
+                      } else {
+                          WRITE(other->sock,
+                                ":%s!%s@%s :%s\r\n",
+                                cli->nick,
+                                cli->user,
+                                cli->hostname,
+                                params[1]);
+                      }
                   }
+                  iter_clean(m);
+                  is_valid_target = 1;
+                  break;
               }
-              iter_clean(m);
-              break;
           }
+          iter_clean(ch);
       }
-      iter_clean(ch);
 
       //this target is neither a client nor a channel, return ERR_NOSUCHNICK
       //FIX: print two nicks? ---------------------------------------------------------------------------------------------------------------------------------------
-      WRITE(cli->sock,
-            ":%s %d %s %s :No such nick/channel\r\n",
-            server_info->hostname,
-            ERR_NOSUCHNICK,
-            cli->nick,
-            cli->nick);
+      if (!is_valid_target) {
+          WRITE(cli->sock,
+                ":%s %d %s %s :No such nick/channel\r\n",
+                server_info->hostname,
+                ERR_NOSUCHNICK,
+                target,
+                target);
+      }
 
       //go to next target
       target = strtok(NULL, ",");
