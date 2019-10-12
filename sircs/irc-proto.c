@@ -400,9 +400,6 @@ void remove_client_from_channel(server_info_t* server_info, client_t* cli, chann
         
         // Remove channel if it becomes empty
         remove_channel_if_empty(server_info, cli->channel);
-        
-        // Set client channel to NULL
-        cli->channel= NULL;
     }
 }
 
@@ -592,6 +589,8 @@ void cmdQuit(CMD_ARGS)
                  cli->user,
                  cli->hostname);
     
+    cli->channel = NULL;
+    
     // Remove client from the server's client list
     // (Junrui) FIXME: This iterates over the whole list and defeats the purpose?
     // Backward pointer?
@@ -644,6 +643,8 @@ void cmdJoin(CMD_ARGS)
                          cli->nick,
                          cli->user,
                          cli->hostname);
+            
+            cli->channel = NULL;
         }
         
         // Client is no longer in any channel by this point
@@ -694,7 +695,7 @@ void cmdJoin(CMD_ARGS)
               RPL_ENDOFNAMES,
               cli->nick,
               ch_found->name);
-
+        
     } /* Channel name valid */
 }
 
@@ -744,6 +745,8 @@ void cmdPart(CMD_ARGS)
                      cli->user,
                      cli->hostname,
                      cli->channel->name);
+        
+        cli->channel = NULL;
     }
     
 }
