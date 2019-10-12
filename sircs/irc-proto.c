@@ -431,6 +431,7 @@ channel_t* find_channel_by_name(server_info_t* server_info, char* target_name)
         channel_t* ch = (channel_t *) iter_get(it);
         if ( !strncmp(target_name, ch->name, RFC_MAX_NICKNAME+1) )
         {
+            iter_clean(it);
             return ch;
         }
     } /* Iterator loop */
@@ -746,8 +747,7 @@ void cmdPart(CMD_ARGS)
              ":%s!%s@%s QUIT :\r\n",
              cli->nick,
              cli->user,
-             cli->hostname,
-             cli->channel->name);
+             cli->hostname);
         
         remove_client_from_channel(server_info, cli, cli->channel);
         
@@ -945,7 +945,9 @@ void cmdWho(CMD_ARGS)
                 // RFC: <channel> <user> <host> <server> <nick> <H|G>[*][@|+] :<hopcount> <real name>
                 reply(server_info, cli,
                       ":%s %d %s %s %s %s %s %s H :0 %s\r\n",
-                      server_info->hostname, RPL_WHOREPLY, cli->nick,
+                      server_info->hostname,
+                      RPL_WHOREPLY,
+                      cli->nick,
                       other->channel->name,
                       other->user,
                       other->hostname,
@@ -955,6 +957,7 @@ void cmdWho(CMD_ARGS)
                       );
             }
             reply(server_info, cli,
+                  "%s %d %s * :End of /WHO list\r\n",
                   server_info->hostname,
                   RPL_ENDOFWHO,
                   cli->nick);
