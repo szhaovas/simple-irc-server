@@ -60,13 +60,13 @@ COMMAND(cmdWho);
  * the command requires.  It may take more optional parameters.
  */
 struct dispatch cmds[] = {/* cmd,    reg  #parm  function usage*/
-    { "NICK",    0, 1, cmdNick},
+    { "NICK",    0, 0, cmdNick},
     { "USER",    0, 4, cmdUser},
     { "QUIT",    1, 0, cmdQuit},
     { "JOIN",    1, 1, cmdJoin},
     { "PART",    1, 1, cmdPart},
     { "LIST",    1, 0, cmdList},
-    { "PRIVMSG", 1, 2, cmdPmsg},
+    { "PRIVMSG", 1, 0, cmdPmsg},
     { "WHO",     1, 0, cmdWho},
 };
 
@@ -211,14 +211,6 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
             else if (nparams < cmds[i].minparams)
             {
                 // ERROR - the client didn't specify enough parameters for this command
-                //There are commands that need to return erros more specific than ERR_NEEDMOREPARAMS
-                //NICK: ERR_NONICKNAMEGIVEN
-                //PRIVMSG: ERR_NORECIPIENT, ERR_NOTEXTTOSEND
-                if (!strcasecmp(command, "NICK") || !strcasecmp(command, "PRIVMSG")) {
-                    //ignore minparams restriction and pass down to command handlers
-                    (*cmds[i].handler)(server_info, cli, params, nparams);
-                    return;
-                }
                 reply(server_info, cli,
                       ":%s %d %s %s :Not enough parameters\r\n",
                       server_info->hostname,
