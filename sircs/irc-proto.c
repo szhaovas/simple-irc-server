@@ -77,6 +77,38 @@ struct dispatch cmds[] = {/* cmd,    reg  #parm  function usage*/
 #define reply(sock, fmt, ...) do { dprintf(sock, fmt, ##__VA_ARGS__); } while (0)
 #define vreply(sock, fmt, va) do { vdprintf(sock, fmt, va); } while (0)
 
+client_t* __safe__vwrite(server_info_t* server_info,
+                         client_t* cli,
+                         const char* restrict format,
+                         va_list args)
+{
+    if (cli)
+    {
+        int rc = vdprintf(cli->sock, format, args);
+        
+        if (rc < 0)
+        {
+            cmdQuit(server_info, cli, NULL, 0);
+            return NULL;
+        }
+        else
+            return cli;
+    }
+    else
+        return NULL;
+}
+
+client_t* __safe__write(server_info_t* server_info, client_t* cli, const char* restrict format, ...)
+{
+    // Retrieve va_list and send reply message
+    va_list args;
+    va_start(args, format);
+    cli = __safe__vwrite(server_info, cli, format, args);
+    va_end(args);
+    return cli;
+}
+
+
 
 /**
  * Handle a command line.  NOTE:  You will probably want to
