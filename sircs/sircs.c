@@ -173,6 +173,7 @@ int main(int argc, char *argv[] ){
                         if (__rc < 0)
                         {
                             DPRINTF(DEBUG_CLIENTS, "Client fd=%i closed the connection.\n", sock);
+                            cli->registered = 1;
                             handleLine("QUIT", &server_info, cli);
                         }
                     }
