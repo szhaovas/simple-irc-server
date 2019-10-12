@@ -252,10 +252,13 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
             }
             
             // Clean zombies
-            ITER_LOOP(it, server_info->zombies)
+            Iterator_LinkedList* it; \
+            for (it = iter(server_info->zombies);
+                 !iter_empty(it);
+                 iter_next(it))
             {
                 client_t* zombie = iter_get(it);
-                iter_drop(it);
+                iter_drop_curr(it);
                 free(zombie);
             }
             return iter_clean(it);
@@ -420,7 +423,7 @@ void remove_channel_if_empty(server_info_t* server_info, channel_t* ch)
 {
     if (ch->members->size == 0)
     {
-        drop_item(server_info->channels, ch);
+        find_and_drop_item(server_info->channels, ch);
         free(ch->members);
         free(ch);
     }
@@ -435,7 +438,7 @@ void remove_client_from_channel(server_info_t* server_info, client_t* cli, chann
     if (cli->channel && cli->channel == ch)
     {
         // Remove client from the channel member list
-        drop_item(cli->channel->members, cli);
+        find_and_drop_item(cli->channel->members, cli);
         
         // Remove channel if it becomes empty
         remove_channel_if_empty(server_info, cli->channel);
@@ -656,7 +659,7 @@ void cmdQuit(CMD_ARGS)
     // Remove client from the server's client list
     // (Junrui) FIXME: This iterates over the whole list and defeats the purpose?
     // Backward pointer?
-    drop_item(server_info->clients, cli);
+    find_and_drop_item(server_info->clients, cli);
     
     // Close the connection
     close(cli->sock);
@@ -753,7 +756,7 @@ void cmdJoin(CMD_ARGS)
         
         // REPLY - End
         reply(server_info, cli,
-              ":%s %d %s %s :End of channel members\r\n",
+              ":%s %d %s %s :End of /NAMES list\r\n",
               server_info->hostname,
               RPL_ENDOFNAMES,
               cli->nick,
@@ -851,8 +854,7 @@ void cmdList(CMD_ARGS)
  */
 void cmdPmsg(CMD_ARGS)
 {
-    //server_info_t* server_info, client_t* cli, char **params, int nparams
-    //<target>{,<target>} <text to be sent>
+    // <target>{,<target>} <text to be sent>
     //ERR_NORECIPIENT
     //ERR_NOTEXTTOSEND
     //ERR_NOSUCHNICK (when cannot find nick/channame?)
@@ -890,7 +892,7 @@ void cmdPmsg(CMD_ARGS)
         }
         
         //is target a client?
-        if (is_nickname_valid(target, strlen(target))) {
+        if (is_nickname_valid(target)) {
             ITER_LOOP(c, server_info->clients)
             {
                 client_t* sendTo = (client_t *) iter_get(c);
@@ -911,6 +913,7 @@ void cmdPmsg(CMD_ARGS)
         //is target a channel?
         //if target is a client, skip this part
         else if (is_channel_valid(target)) {
+            // FIXME: use find_channel_by_name
             ITER_LOOP(ch, server_info->channels)
             {
                 channel_t* sendTo = (channel_t *) iter_get(ch);

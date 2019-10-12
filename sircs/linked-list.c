@@ -21,9 +21,10 @@
 void init_list(LinkedList* list)
 {
     list->head = NULL;
-    list->tail = NULL;
     list->size = 0;
-    list->__count = 0;
+    list->__id_gen = 0;
+    list->__references = 0;
+    list->__has_invalid = FALSE;
 }
 
 
@@ -38,13 +39,13 @@ Node* add_item(LinkedList* list, void* data)
     node->data = data;
     node->prev = NULL;
     node->next = NULL;
-    node->__id = list->__count;
+    node->__id = list->__id_gen;
+    node->__valid = 1;
     
     // Adding to an empty list
     if (list->head == NULL)
     {
         list->head = node;
-        list->tail = node;
     }
     // At least one elements => Insert at head
     else
@@ -54,7 +55,7 @@ Node* add_item(LinkedList* list, void* data)
         list->head = node;
     }
     list->size += 1;
-    list->__count += 1;
+    list->__id_gen += 1;
     return node;
 }
 
@@ -85,25 +86,65 @@ int find_item(LinkedList* list, void* data)
 void* drop_node(LinkedList* list, Node* node)
 {
     void* data = node->data;
-    // Fix link
-    // |node| wasn't head
-    if (node->prev != NULL)
-        node->prev->next = node->next;
-    // |node| was head => head now points to the next node
-    else
-        list->head = node->next;
-    // |node| wasn't tail
-    if (node->next != NULL)
-        node->next->prev = node->prev;
-    // |node| was tail => tail now points to the previous node
-    else
-        list->tail = node->prev;
-    // Free memory
-    free(node);
+    node->__valid = 0;
     list->size -= 1;
+    list->__has_invalid = TRUE;
     return data;
 }
 
+
+/**
+ * Drop an item from a linked list by iterating through it
+ */
+void find_and_drop_item(LinkedList* list, void* data)
+{
+    ITER_LOOP(it, list)
+    {
+        if (iter_get(it) == data)
+        {
+            iter_drop_curr(it);
+            break;
+        }
+    }
+    iter_clean(it);
+}
+
+
+/**
+ * Remove invalid nodes from a linked list.
+ */
+void remove_invalid(LinkedList* list)
+{
+    if (!list->__has_invalid) return;
+    // Remove invalid nodes at the beginning
+    while (list->head && !list->head->__valid)
+    {
+        Node* next_node = list->head->next;
+        free(list->head);
+        list->head = next_node; // There is no prev link to fix
+    }
+    
+    Node* node = list->head;
+    while (node)
+    {
+        if (!node->__valid)
+        {
+            // Fix Link
+            Node* prev_node = node->prev;
+            Node* next_node = node->next;
+            if (prev_node)
+                prev_node->next = next_node;
+            if (next_node)
+                next_node->prev = prev_node;
+            
+            free(node);
+            node = next_node;
+        }
+        else
+            node = node->next;
+    }
+    list->__has_invalid = FALSE;
+}
 
 
 /**
@@ -131,16 +172,19 @@ char* list_to_str(LinkedList* list, char* buf)
 /* Private functions */
 
 /**
- * Yield the current item from the iterator.
- * Note: this function will increment the pointer, so the same node
- * will never be yielded twice.
+ * Yield the current item from the iterator, and increment the pointer
+ * to point to the next valid node if any (NULL otherwise).
  */
 Node* get_and_incr(Iterator_LinkedList* it)
 {
-    assert(!it->incremented);
-    it->incremented = TRUE;
     Node* curr = it->curr;
-    it->curr = it->curr->next; // Advance by one node
+    
+    // Advance iterator until it finds a valid node, or
+    // reaches the end of the list
+    do {
+        it->curr = it->curr->next;
+    } while (it->curr && !it->curr->__valid);
+    
     return curr;
 }
 
@@ -156,7 +200,7 @@ Iterator_LinkedList* iter(LinkedList* list)
     Iterator_LinkedList* it = malloc(sizeof(Iterator_LinkedList));
     it->list = list;
     it->curr = list->head;
-    it->incremented = FALSE;
+    list->__references += 1;
     return it;
 }
 
@@ -176,6 +220,11 @@ int iter_empty(Iterator_LinkedList* it)
  */
 void iter_clean(Iterator_LinkedList* it)
 {
+    it->list->__references -= 1;
+    // The last iterator refering to a list should call |remove_invalid|
+    // to remove all invalid nodes
+    if (it->list->__references == 0 && it->list->__has_invalid)
+        remove_invalid(it->list);
     free(it);
 }
 
@@ -185,9 +234,8 @@ void iter_clean(Iterator_LinkedList* it)
  */
 void iter_next(Iterator_LinkedList* it)
 {
-    if (!it->incremented)
+    if (it->curr)
         get_and_incr(it);
-    it->incremented = FALSE;
 }
 
 
@@ -213,26 +261,8 @@ Node* iter_add(Iterator_LinkedList* it, void* data)
 /**
  * Drop the current item from an iterator.
  */
-void* iter_drop(Iterator_LinkedList* it)
+void* iter_drop_curr(Iterator_LinkedList* it)
 {
     Node* to_be_dropped = get_and_incr(it);
     return drop_node(it->list, to_be_dropped);
-}
-
-
-/**
- * Drop an item from a linked list by iterating through it
- */
-void drop_item(LinkedList* list, void* data)
-{
-    Iterator_LinkedList* it;
-    for (it = iter(list); !iter_empty(it); iter_next(it))
-    {
-        if (iter_get(it) == data)
-        {
-            iter_drop(it);
-            break;
-        }
-    }
-    iter_clean(it);
 }

@@ -7,6 +7,7 @@ struct _node_struct {
     struct _node_struct* next;
     void* data;
     int __id;
+    int __valid;
 };
 
 typedef struct _node_struct Node;
@@ -15,9 +16,10 @@ typedef struct _node_struct Node;
 /* Linked List */
 typedef struct {
     Node* head;
-    Node* tail;
     int size;
-    int __count;
+    int __id_gen;
+    int __references;
+    int __has_invalid;
 } LinkedList;
 
 
@@ -27,7 +29,7 @@ Node* add_item(LinkedList* list, void* data);
 
 int find_item(LinkedList* list, void* data);
 
-void drop_item(LinkedList* list, void* data);
+void find_and_drop_item(LinkedList* list, void* data);
 
 void* drop_node(LinkedList* list, Node* node);
 
@@ -44,7 +46,7 @@ char* list_to_str(LinkedList* list, char* buf);
      Iterator_LinkedList* it;
      for (it = iter(list); !iter_empty(it); it = iter_next(it))
      {
-        // iter_get, iter_add, iter_drop, etc.
+        // iter_get, iter_add, iter_drop_curr, etc.
      }
      iter_clean(it);
  
@@ -53,7 +55,6 @@ char* list_to_str(LinkedList* list, char* buf);
 typedef struct {
     LinkedList* list;
     Node* curr;
-    int incremented;
 } Iterator_LinkedList;
 
 Iterator_LinkedList* iter(LinkedList* list);
@@ -68,7 +69,7 @@ void* iter_get(Iterator_LinkedList* it);
 
 Node* iter_add(Iterator_LinkedList* it, void* data);
 
-void* iter_drop(Iterator_LinkedList* it);
+void* iter_drop_curr(Iterator_LinkedList* it);
 
 #define ITER_LOOP(it, list) \
     Iterator_LinkedList* it; \
