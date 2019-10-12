@@ -45,9 +45,13 @@ The channel structure has type `channel_t`, which includes the name of the chann
 We have placed the word `CHOICE` next to the code for which the RFC does not specify the standard behavior. The following lists summarize the implementation choices we have made:
 
 1. If a server reply must quote a string sent by the client, e.g., an invalid command or nickname, then we truncate a long string to keep server message from exceeding the message size limit. If the string is empty, we replace it with the character `*`.
+
 2. If the client issues multiple USER commands before being registered (i.e. issuing a valid NICK command), then existing client information is silently overwritten by each USER command.
+
 3. For JOIN and PART, if the client has specified a target list, we take only the first item and ignore the rest.
-4. If a client parts a channel (both explicitly it was a PART message or implicitly if the client joins another channel), we echo PART instead of QUIT to channel
+
+<!-- 4. If a client parts a channel (both explicitly it was a PART message or implicitly if the client joins another channel), we echo PART instead of QUIT to channel -->
 
 
 ## Known Issues
+1. Depending on the timing of disconnection, the function `vreply()` may segfault.

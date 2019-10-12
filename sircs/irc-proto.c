@@ -647,15 +647,16 @@ void cmdJoin(CMD_ARGS)
         {
             // Join a channel of which the client is already a member => Do nothing
             if ( ch_found && !strcmp(cli->channel->name, ch_found->name) ) return;
-            remove_client_from_channel(server_info, cli, cli->channel);
-            // Echo QUIT to members of the previous channel
-            // (but client still connected, so cannot reuse cmdQuit)
-            echo_message(server_info, cli, FALSE,
+            echo_message(server_info, cli, TRUE,
                          ":%s!%s@%s QUIT :Client left channel\r\n",
                          cli->nick,
                          cli->user,
                          cli->hostname);
             cli->channel = NULL;
+            remove_client_from_channel(server_info, cli, cli->channel);
+            // Echo QUIT to members of the previous channel
+            // (but client still connected, so cannot reuse cmdQuit)
+            
         }
         // Client is no longer in any channel at this point
         if (!ch_found) // Create the channel if it doesn't exist yet
