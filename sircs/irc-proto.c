@@ -350,24 +350,27 @@ int check_collision(char* this, char* that)
 /**
  * Send MOTD messages.
  */
-void motd(int sock, char* hostname)
+void motd(client_t* cli, char* hostname)
 {
-    reply(sock,
-          ":%s %d :- %s Message of the day - \r\n",
+    reply(cli->sock,
+          ":%s %d %s :- %s Message of the day - \r\n",
           hostname,
           RPL_MOTDSTART,
+          cli->nick,
           hostname);
     
-    reply(sock,
-          ":%s %d :- %s\r\n",
+    reply(cli->sock,
+          ":%s %d %s :- %s\r\n",
           hostname,
           RPL_MOTD,
+          cli->nick,
           MOTD_STR);
     
-    reply(sock,
-          ":%s %d :End of /MOTD command\r\n",
+    reply(cli->sock,
+          ":%s %d %s :End of /MOTD command\r\n",
           hostname,
-          RPL_ENDOFMOTD);
+          RPL_ENDOFMOTD,
+          cli->nick);
 }
 
 
@@ -536,7 +539,7 @@ void cmdNick(CMD_ARGS)
         if (!cli->registered && *cli->user)
         {
             cli->registered = 1;
-            motd(cli->sock, server_info->hostname);
+            motd(cli, server_info->hostname);
         }
     } /* nick valid */
 }
@@ -570,7 +573,7 @@ void cmdUser(CMD_ARGS){
     if (!cli->registered && *cli->nick)
     {
         cli->registered = 1;
-        motd(cli->sock, server_info->hostname);
+        motd(cli, server_info->hostname);
     }
 }
 
