@@ -60,13 +60,13 @@ COMMAND(cmdWho);
  * the command requires.  It may take more optional parameters.
  */
 struct dispatch cmds[] = {/* cmd,    reg  #parm  function usage*/
-    { "NICK",    0, 1, cmdNick},
+    { "NICK",    0, 0, cmdNick},
     { "USER",    0, 4, cmdUser},
     { "QUIT",    1, 0, cmdQuit},
     { "JOIN",    1, 1, cmdJoin},
     { "PART",    1, 1, cmdPart},
     { "LIST",    1, 0, cmdList},
-    { "PRIVMSG", 1, 2, cmdPmsg},
+    { "PRIVMSG", 1, 0, cmdPmsg},
     { "WHO",     1, 0, cmdWho},
 };
 
@@ -211,14 +211,6 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
             else if (nparams < cmds[i].minparams)
             {
                 // ERROR - the client didn't specify enough parameters for this command
-                //There are commands that need to return erros more specific than ERR_NEEDMOREPARAMS
-                //NICK: ERR_NONICKNAMEGIVEN
-                //PRIVMSG: ERR_NORECIPIENT, ERR_NOTEXTTOSEND
-                if (!strcasecmp(command, "NICK") || !strcasecmp(command, "PRIVMSG")) {
-                    //ignore minparams restriction and pass down to command handlers
-                    (*cmds[i].handler)(server_info, cli, params, nparams);
-                    return;
-                }
                 reply(server_info, cli,
                       ":%s %d %s %s :Not enough parameters\r\n",
                       server_info->hostname,
@@ -296,7 +288,7 @@ int is_nickname_valid(char* nick)
             return FALSE;
         }
     }
-    return TRUE;
+    return FALSE;
 }
 
 
@@ -312,11 +304,11 @@ int is_channel_valid(char* ch_name)
         return FALSE;
     for (int i = 1; i < RFC_MAX_NICKNAME + 1; i++)
     {
-        if (ch_name[i] != '\0') return TRUE;
+        if (ch_name[i] == '\0') return TRUE;
         if (i == RFC_MAX_NICKNAME) return FALSE;
         if (!IS_CH_CHAR(ch_name[i])) return FALSE;
     }
-    return TRUE; // Never reached
+    return FALSE; // Never reached
 }
 
 
@@ -431,6 +423,7 @@ channel_t* find_channel_by_name(server_info_t* server_info, char* target_name)
         channel_t* ch = (channel_t *) iter_get(it);
         if ( !strncmp(target_name, ch->name, RFC_MAX_NICKNAME+1) )
         {
+            iter_clean(it);
             return ch;
         }
     } /* Iterator loop */
@@ -654,15 +647,16 @@ void cmdJoin(CMD_ARGS)
         {
             // Join a channel of which the client is already a member => Do nothing
             if ( ch_found && !strcmp(cli->channel->name, ch_found->name) ) return;
-            remove_client_from_channel(server_info, cli, cli->channel);
-            // Echo QUIT to members of the previous channel
-            // (but client still connected, so cannot reuse cmdQuit)
-            echo_message(server_info, cli, FALSE,
+            echo_message(server_info, cli, TRUE,
                          ":%s!%s@%s QUIT :Client left channel\r\n",
                          cli->nick,
                          cli->user,
                          cli->hostname);
             cli->channel = NULL;
+            remove_client_from_channel(server_info, cli, cli->channel);
+            // Echo QUIT to members of the previous channel
+            // (but client still connected, so cannot reuse cmdQuit)
+            
         }
         // Client is no longer in any channel at this point
         if (!ch_found) // Create the channel if it doesn't exist yet
@@ -746,8 +740,7 @@ void cmdPart(CMD_ARGS)
              ":%s!%s@%s QUIT :\r\n",
              cli->nick,
              cli->user,
-             cli->hostname,
-             cli->channel->name);
+             cli->hostname);
         
         remove_client_from_channel(server_info, cli, cli->channel);
         
@@ -945,7 +938,9 @@ void cmdWho(CMD_ARGS)
                 // RFC: <channel> <user> <host> <server> <nick> <H|G>[*][@|+] :<hopcount> <real name>
                 reply(server_info, cli,
                       ":%s %d %s %s %s %s %s %s H :0 %s\r\n",
-                      server_info->hostname, RPL_WHOREPLY, cli->nick,
+                      server_info->hostname,
+                      RPL_WHOREPLY,
+                      cli->nick,
                       other->channel->name,
                       other->user,
                       other->hostname,
@@ -955,6 +950,7 @@ void cmdWho(CMD_ARGS)
                       );
             }
             reply(server_info, cli,
+                  "%s %d %s * :End of /WHO list\r\n",
                   server_info->hostname,
                   RPL_ENDOFWHO,
                   cli->nick);
