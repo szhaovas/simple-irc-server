@@ -743,8 +743,14 @@ void cmdPart(CMD_ARGS)
     else // Client is indeed in the channel to part
     {
         echo_message(server_info, cli, TRUE,
-                     cli->nick,
-                     cli->user,
+             ":%s!%s@%s QUIT :\r\n",
+             cli->nick,
+             cli->user,
+             cli->hostname,
+             cli->channel->name);
+        
+        remove_client_from_channel(server_info, cli, cli->channel);
+        
         cli->channel = NULL;
     }
 }
@@ -756,6 +762,7 @@ void cmdPart(CMD_ARGS)
 void cmdList(CMD_ARGS)
 {
     reply(server_info, cli,
+          ":%s %d %s Channel :Users Name\r\n",
           server_info->hostname,
           RPL_LISTSTART,
           cli->nick);
@@ -918,6 +925,7 @@ void cmdWho(CMD_ARGS)
             {
                 // RFC: <channel> <user> <host> <server> <nick> <H|G>[*][@|+] :<hopcount> <real name>
                 reply(server_info, cli,
+                      ":%s %d %s %s %s %s %s %s H :0 %s\r\n",
                       server_info->hostname, RPL_WHOREPLY, cli->nick,
                       other->channel->name,
                       other->user,
@@ -955,8 +963,9 @@ void cmdWho(CMD_ARGS)
                     client_t* other = (client_t *) iter_get(it_cli);
                     // RFC: <channel> <user> <host> <server> <nick> <H|G>[*][@|+] :<hopcount> <real name>
                     reply(server_info, cli,
+                          ":%s %d %s %s %s %s %s %s H :0 %s\r\n",
                           server_info->hostname, RPL_WHOREPLY, cli->nick,
-                          ch_match->name,
+                          other->channel->name,
                           other->user,
                           other->hostname,
                           server_info->hostname,
@@ -968,6 +977,7 @@ void cmdWho(CMD_ARGS)
             }
             // CHOICE: if |safe_query| doesn't match any channel, fall through
             reply(server_info, cli,
+                  ":%s %d %s %s :End of /WHO list\r\n",
                   server_info->hostname,
                   RPL_ENDOFWHO,
                   cli->nick,
