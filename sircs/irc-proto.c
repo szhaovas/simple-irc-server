@@ -256,7 +256,7 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
                 iter_drop(it);
                 free(zombie);
             }
-            return;
+            return iter_clean(it);
         }
     }
     
@@ -617,9 +617,27 @@ void cmdUser(CMD_ARGS){
 
 /**
  * Command QUIT
+ *
+ * In this function, we
+ *   1. Mark the client as zombie
+ *   2. Remove the client from its channel (if any), and remove the channel if it becomes empty
+ *   3. Echo QUIT message to everyone else in the same channel (if any)
+ *   4. Set client's channel to NULL.
+ *   5.
  */
 void cmdQuit(CMD_ARGS)
 {
+    // Check if client is already a zombie:
+    // - If this command was issued by the client,
+    //     then the client will be marked as zombie.
+    // - Else, the command was faked by the server,
+    //     in which case the client has already been duly marked as zombie.
+    if (!cli->zombie)
+    {
+        cli->zombie = TRUE;
+        add_item(server_info->zombies, cli);
+    }
+
     remove_client_from_channel(server_info, cli, cli->channel);
     
     echo_message(server_info, cli, FALSE,
@@ -638,7 +656,8 @@ void cmdQuit(CMD_ARGS)
     // Close the connection
     close(cli->sock);
     
-    free(cli);
+    // free(cli) is done after a handler returns to handleLine,
+    // during the zombie-cleaning stage
 }
 
 
@@ -676,7 +695,8 @@ void cmdJoin(CMD_ARGS)
             
             remove_client_from_channel(server_info, cli, cli->channel);
             
-            // Echo QUIT to members of the previous channel (but client still connected, so cannot reuse cmdQuit)
+            // Echo QUIT to members of the previous channel
+            // (but client still connected, so cannot reuse cmdQuit)
             echo_message(server_info, cli, FALSE,
                          ":%s!%s@%s QUIT :Client left channel\r\n",
                          cli->nick,
