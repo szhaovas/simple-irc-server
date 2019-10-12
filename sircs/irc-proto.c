@@ -144,11 +144,10 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
     if (!command || *command == '\0'){
         // Send an unknown command error
         reply(server_info, cli,
-              ":%s %d %s %s :Unknown command\r\n",
+              ":%s %d %s * :Unknown command\r\n", // Cannot use |command| in this message
               server_info->hostname,
               ERR_NEEDMOREPARAMS,
-              target,
-              command);
+              target);
         return;
     }
     
@@ -159,11 +158,10 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
     if (*command == '\0'){
         // Send an unknown command error
         reply(server_info, cli,
-              ":%s %d %s %s :Unknown command\r\n",
+              ":%s %d %s * :Unknown command\r\n", // Cannot use |command| in this message
               server_info->hostname,
               ERR_NEEDMOREPARAMS,
-              target,
-              command);
+              target);
         return;
     }
     
@@ -262,12 +260,13 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
     
     if (i == NELMS(cmds)){
         // ERROR - unknown command
+        GET_SAFE_NAME(safe_command, command)
         reply(server_info, cli,
               ":%s %d %s %s :Unknown command\r\n",
               server_info->hostname,
               ERR_UNKNOWNCOMMAND,
               target,
-              command);
+              safe_command);
         return;
     }
 }
