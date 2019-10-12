@@ -836,7 +836,7 @@ void cmdPmsg(CMD_ARGS)
                     //CHOICE:
                     //allow long (> 512b) messages, send in smaller patches
                     int max_len = RFC_MAX_MSG_LEN - 12 - 2*RFC_MAX_NICKNAME;
-                    int msg_len = strlen(params[1]);
+                    int msg_len = (int)strlen(params[1]);
                     int num_patches = msg_len / max_len;
 
                     int i;
@@ -881,7 +881,7 @@ void cmdPmsg(CMD_ARGS)
                             //CHOICE:
                             //allow long (> 512b) messages, send in smaller patches
                             int max_len = RFC_MAX_MSG_LEN - 12 - 2*RFC_MAX_NICKNAME;
-                            int msg_len = strlen(params[1]);
+                            int msg_len = (int)strlen(params[1]);
                             int num_patches = msg_len / max_len;
 
                             int i;

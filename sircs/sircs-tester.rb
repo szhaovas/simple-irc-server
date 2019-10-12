@@ -282,6 +282,38 @@ class IRC
 	end
     end
 
+  def invalid_nick(s)
+      send("NICK #{s}")
+
+      data = recv_data_from_server(1);
+
+      ss = s[0,9]
+
+      if(data.size == 1 and data[0] =~ /^:[^ ]+ *432 \* *#{ss} *:Erroneus nickname */)
+          return true
+      else
+          puts data
+          puts "NICK " +s+ " should return ERR_ERRONEUSNICKNAME and nothing more"
+          return false
+      end
+  end
+
+  def invalid_chan(s)
+      send("JOIN #{s}")
+
+      data = recv_data_from_server(1);
+
+      ss = s[0,9]
+
+      if(data[0] =~ /^:[^ ]+ *432  *#{ss} *:Erroneus nickname */)
+          return true
+      else
+          puts data
+          puts "NICK " +s+ " should return ERR_ERRONEUSNICKNAME and nothing more"
+          return false
+      end
+  end
+
 end
 
 
@@ -329,7 +361,7 @@ begin
 # so we test for this.
     tn = test_name("NICK")
     irc.send_nick("rui")
-    puts "<-- Testing for silence (5 seconds)..."
+    puts "<-- Testing for silence (1 seconds)..."
 
     eval_test(tn, nil, nil, irc.test_silence(1))
 
@@ -346,7 +378,7 @@ begin
     irc.connect()
 
     irc.send_user("myUsername myHostname myServername :My real name")
-    puts "<-- Testing for silence (5 seconds)..."
+    puts "<-- Testing for silence (1 seconds)..."
 
     eval_test(tn, nil, "should not return a response on its own",
 	      irc.test_silence(1))
@@ -429,10 +461,32 @@ begin
 	      irc.check_part("rui2", "#linux"))
 
 ## Your tests go here!
-tn = test_name("LONG_PRIVMSG")
-msg = str = "a" * 1000
-irc2.send_privmsg("rui", msg)
-eval_test(tn, nil, nil, irc.checkmsg("rui2", "rui", msg))
+############## INVALID_NICKNAME ###################
+# <nick> ::= <letter> { <letter> | <number> | <special> }
+# <nick> cannot consist of more than 9 characters
+
+    tn = test_name("SPEC_CHAR_NICKNAME")
+    irc3 = IRC.new($SERVER, $PORT, '', '')
+    irc3.connect()
+    eval_test(tn, nil, nil, irc3.invalid_nick("#Datroll"))
+
+    tn = test_name("LONG_NICKNAME")
+    eval_test(tn, nil, nil, irc3.invalid_nick("lololololololololololololololo"))
+    irc3.disconnect()
+
+############## INVALID_CHANNAME ###################
+# <channel> ::= ('#' | '&') <chstring>
+# <channel> cannot consist of more than 9 characters
+
+############## LONG_PRIVMSG ###################
+# When sending a very long PRIVMSG, the message should
+# be split and sent in multiple patches
+    tn = test_name("LONG_PRIVMSG")
+    msg = str = "a" * 1000
+    irc2.send_privmsg("rui", msg)
+    eval_test(tn, nil, nil, irc.checkmsg("rui2", "rui", msg))
+
+############## LONG_PRIVMSG ###################
 # Things you might want to test:
 #  - Multiple clients in a channel
 #  - Abnormal messages of various sorts
