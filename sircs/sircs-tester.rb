@@ -8,13 +8,13 @@
 # Some tests depend on the correct execution of previous ones.
 # For example, you cannot pass the "PART" test if your "JOIN" test failed.
 # For this reason, the script exits once the server fails a test.
-# If you fail a specific test, we suggest you modify this code 
+# If you fail a specific test, we suggest you modify this code
 # to print out exactly # what is going on, or perhaps remove tests that
 # fail so that you can test other, unrelated tests if you simply haven't
 # implemented a particular bit of functionality yet (e.g., you might
 # remove the WHO or LIST tests to test PART).
-# 
-# Part of the reason we give out the code for this 
+#
+# Part of the reason we give out the code for this
 # script so that you can modify it and write your own test
 # scripts later on.  Remember that passing this does not ensure full credit
 # on the final IRC server grade:  The final tests will be more extensive
@@ -28,7 +28,7 @@
 require 'socket'
 
 $SERVER = "127.0.0.1"
-$PORT = 6667  ########## DONT FORGET TO CHANGE THIS
+$PORT = 6666  ########## DONT FORGET TO CHANGE THIS
 
 if ARGV.size == 0
     puts "Usage: ./sircs-tester.rb [servIpAddr] [servPort]"
@@ -60,14 +60,14 @@ class IRC
     def recv_data_from_server (timeout)
         pending_event = Time.now.to_i
         received_data = Array.new
-        k = 0 
+        k = 0
         flag = 0
         while flag == 0
             ## check for timeout
             time_elapsed = Time.now.to_i - pending_event
             if (time_elapsed > timeout)
                 flag = 1
-            end 
+            end
             ready = select([@irc], nil, nil, 0.0001)
             next if !ready
             for s in ready[0]
@@ -90,11 +90,11 @@ class IRC
             return true
         end
     end
-    
+
     def send(s)
         # Send a message to the irc server and print it to the screen
         puts "--> #{s}"
-        @irc.send "#{s}\n", 0 
+        @irc.send "#{s}\n", 0
     end
 
     def connect()
@@ -109,7 +109,7 @@ class IRC
     def send_nick(s)
         send("NICK #{s}")
     end
-    
+
     def send_user(s)
         send("USER #{s}")
     end
@@ -117,7 +117,7 @@ class IRC
     def get_motd
         data = recv_data_from_server(1)
         ## CHECK data here
-      
+
         if(data[0] =~ /^:[^ ]+ *375 *rui *:- *[^ ]+ *Message of the day - *.\n/)
             puts "\tRPL_MOTDSTART 375 correct"
         else
@@ -126,10 +126,10 @@ class IRC
             puts "\tRPL_MOTDSTART 375 incorrect"
             return false
         end
-        
+
         k = 1
         while ( k < data.size-1)
-            
+
             if(data[k] =~ /:[^ ]+ *372 *rui *:- *.*/)
                 puts "\tRPL_MOTD 372 correct"
             else
@@ -145,22 +145,22 @@ class IRC
             puts "\tRPL_ENDOFMOTD 376 incorrect"
             return false
         end
-        
+
         return true
     end
 
     def send_privmsg(s1, s2)
 	send("PRIVMSG #{s1} :#{s2}")
     end
-        
+
     def raw_join_channel(joiner, channel)
         send("JOIN #{channel}")
         ignore_reply()
     end
-    
+
     def join_channel(joiner, channel)
         send("JOIN #{channel}")
-        
+
         data = recv_data_from_server(1);
         if(data[0] =~ /^:#{joiner}.*JOIN *#{channel}/)
             puts "\tJOIN echoed back"
@@ -168,30 +168,30 @@ class IRC
             puts "\tJOIN was not echoed back to the client"
             return false
         end
-        
+
         if(data[1] =~ /^:[^ ]+ *353 *#{joiner} *= *#{channel} *:.*#{joiner}/)
             puts "\tRPL_NAMREPLY 353 correct"
         else
             puts "\tRPL_NAMREPLY 353 incorrect"
             return false
         end
-        
+
         if(data[2] =~ /^:[^ ]+ *366 *#{joiner} *#{channel} *:End of \/NAMES list/)
             puts "\tRPL_ENDOFNAMES 366 correct"
         else
             puts "\tRPL_ENDOFNAMES 366 incorrect"
             return false
         end
-        
+
         return true
     end
 
     def who(s)
         send("WHO #{s}")
-        
+
         data = recv_data_from_server(1);
-        
-        if(data[0] =~ /^:[^ ]+ *352 *rui *#{s} *please *[^ ]+ *[^ ]+ *rui *H *:0 */)
+
+        if(data[0] =~ /^:[^ ]+ *352 *rui *#{s} *myUsername *[^ ]+ *[^ ]+ *rui *H *:0 */) #fix---------------------------------------------------------------------
             puts "\tRPL_WHOREPLY 352 correct"
         else
             puts data
@@ -207,10 +207,10 @@ class IRC
         end
         return true
     end
-    
+
     def list
 	send("LIST")
-        
+
         data = recv_data_from_server(1);
         if(data[0] =~ /^:[^ ]+ *321 *rui *Channel *:Users Name/)
             puts "\tRPL_LISTSTART 321 correct"
@@ -218,28 +218,28 @@ class IRC
             puts "\tRPL_LISTSTART 321 incorrect"
             return false
         end
-        
-        if(data[1] =~ /^:[^ ]+ *322 *rui *#linux.*1/)
+
+        if(data[1] =~ /^:[^ ]+ *322 *rui *#linux *1/) #fix---------------------------------------------------------------------------------------------------------
             puts "\tRPL_LIST 322 correct"
         else
             puts "\tRPL_LIST 322 incorrect"
             return false
         end
-        
+
         if(data[2] =~ /^:[^ ]+ *323 *rui *:End of \/LIST/)
             puts "\tRPL_LISTEND 323 correct"
         else
             puts "\tRPL_LISTEND 323 incorrect"
             return false
         end
-        
+
         return true
     end
-    
+
     def checkmsg(from, to, msg)
 	reply_matches(/^:#{from} *PRIVMSG *#{to} *:#{msg}/, "PRIVMSG")
     end
-    
+
     def check2msg(from, to1, to2, msg)
         data = recv_data_from_server(1);
         if((data[0] =~ /^:#{from} *PRIVMSG *#{to1} *:#{msg}/ && data[1] =~ /^:#{from} *PRIVMSG *#{to2} *:#{msg}/) ||
@@ -251,20 +251,20 @@ class IRC
             return false
         end
     end
-    
+
     def check_echojoin(from, channel)
 	reply_matches(/^:#{from}.*JOIN *#{channel}/,
 			    "Test if first client got join echo")
     end
-    
+
     def part_channel(parter, channel)
         send("PART #{channel}")
-	reply_matches(/^:#{parter}![^ ]+@[^ ]+ *QUIT *:/)
+	reply_matches(/^:#{parter}![^ ]+@[^ ]+ *QUIT *:/) #fix----------------------------------------------------------------
 
     end
 
     def check_part(parter, channel)
-	reply_matches(/^:#{parter}![^ ]+@[^ ]+ *QUIT *:/)
+	reply_matches(/^:#{parter}![^ ]+@[^ ]+ *QUIT *:/) #fix----------------------------------------------------------------
     end
 
     def ignore_reply
@@ -330,9 +330,9 @@ begin
     tn = test_name("NICK")
     irc.send_nick("rui")
     puts "<-- Testing for silence (5 seconds)..."
-    
-    eval_test(tn, nil, nil, irc.test_silence(5))
-    
+
+    eval_test(tn, nil, nil, irc.test_silence(1))
+
 
 ############## TEST USER COMMAND ##################
 # The RFC states that there is no response on a USER,
@@ -348,8 +348,8 @@ begin
     irc.send_user("myUsername myHostname myServername :My real name")
     puts "<-- Testing for silence (5 seconds)..."
 
-    eval_test(tn, nil, "should not return a response on its own", 
-	      irc.test_silence(5))
+    eval_test(tn, nil, "should not return a response on its own",
+	      irc.test_silence(1))
 
 ############# TEST FOR REGISTRATION ##############
 # A NICK+USER is a registration that triggers the
@@ -358,7 +358,7 @@ begin
     tn = test_name("Registration")
     irc.send_nick("rui")
     puts "<-- Listening for MOTD...";
-    
+
     eval_test(tn, nil, nil, irc.get_motd())
 
 ############## TEST JOINING ####################
@@ -429,7 +429,10 @@ begin
 	      irc.check_part("rui2", "#linux"))
 
 ## Your tests go here!
-# 
+tn = test_name("LONG_PRIVMSG")
+msg = str = "a" * 1000
+irc2.send_privmsg("rui", msg)
+eval_test(tn, nil, nil, irc.checkmsg("rui2", "rui", msg))
 # Things you might want to test:
 #  - Multiple clients in a channel
 #  - Abnormal messages of various sorts
