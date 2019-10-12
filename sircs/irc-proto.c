@@ -5,7 +5,7 @@
 #include <fcntl.h>
 #include <ctype.h> // isalpha(), isdigit()
 #include <stdarg.h> // va_list, etc.
-#include <assert.h>
+#include <assert.h> // assert()
 
 #include "irc-proto.h"
 #include "sircs.h"
@@ -108,12 +108,8 @@ void reply(server_info_t* server_info, client_t* cli, const char* restrict forma
 }
 
 
-
 /**
- * Handle a command line.  NOTE:  You will probably want to
- * modify the way this function is called to pass in a client
- * pointer or a table pointer or something of that nature
- * so you know who to dispatch on...
+ * Handle a command line.
  * Mostly, this is here to do the parsing and dispatching for you.
  *
  * This function takes a single line of text.  You MUST have
@@ -335,8 +331,6 @@ int is_channel_valid(char* ch_name)
 }
 
 
-
-
 /**
  * Check if two chars are equivalent
  *
@@ -359,7 +353,6 @@ int equivalent_char(char a, char b)
         default: return FALSE;
     }
 }
-
 
 
 /**
@@ -457,8 +450,7 @@ channel_t* find_channel_by_name(server_info_t* server_info, char* target_name)
     } /* Iterator loop */
     iter_clean(it);
     return NULL;
-}
-
+    }
 
 
 /**
@@ -496,7 +488,6 @@ void echo_message(server_info_t* server_info,
     }
     // Else, the client isn't any channel.
 }
-
 
 
 /* Command handlers */
@@ -580,7 +571,6 @@ void cmdNick(CMD_ARGS)
 }
 
 
-
 /**
  * Command USER
  */
@@ -613,7 +603,6 @@ void cmdUser(CMD_ARGS){
 }
 
 
-
 /**
  * Command QUIT
  *
@@ -636,7 +625,7 @@ void cmdQuit(CMD_ARGS)
         cli->zombie = TRUE;
         add_item(server_info->zombies, cli);
     }
-
+    
     remove_client_from_channel(server_info, cli, cli->channel);
     
     echo_message(server_info, cli, FALSE,
@@ -658,7 +647,6 @@ void cmdQuit(CMD_ARGS)
     // free(cli) is done after a handler returns to handleLine,
     // during the zombie-cleaning stage
 }
-
 
 
 /**
@@ -758,7 +746,6 @@ void cmdJoin(CMD_ARGS)
 }
 
 
-
 /**
  * Command PART
  */
@@ -810,7 +797,6 @@ void cmdPart(CMD_ARGS)
 }
 
 
-
 /**
  * Command LIST
  */
@@ -843,7 +829,6 @@ void cmdList(CMD_ARGS)
 }
 
 
-
 /**
  * Command PRIVMSG
  */
@@ -852,7 +837,6 @@ void cmdPmsg(CMD_ARGS)
     /* do something */
     
 }
-
 
 
 /**
