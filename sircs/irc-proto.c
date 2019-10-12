@@ -288,7 +288,7 @@ int is_nickname_valid(char* nick)
             return FALSE;
         }
     }
-    return TRUE;
+    return FALSE;
 }
 
 
@@ -304,11 +304,11 @@ int is_channel_valid(char* ch_name)
         return FALSE;
     for (int i = 1; i < RFC_MAX_NICKNAME + 1; i++)
     {
-        if (ch_name[i] != '\0') return TRUE;
+        if (ch_name[i] == '\0') return TRUE;
         if (i == RFC_MAX_NICKNAME) return FALSE;
         if (!IS_CH_CHAR(ch_name[i])) return FALSE;
     }
-    return TRUE; // Never reached
+    return FALSE; // Never reached
 }
 
 
