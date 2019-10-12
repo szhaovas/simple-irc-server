@@ -840,13 +840,14 @@ void cmdPmsg(CMD_ARGS)
                     int num_patches = msg_len / max_len;
 
                     int i;
-                    char buffer[max_len];
+                    char buffer[max_len+1];
                     reply(server_info, sendTo,
                           ":%s PRIVMSG %s :",
                           cli->nick,
                           target);
                     for (i = 0; i < num_patches; i++) {
                         strncpy(buffer, params[1], max_len);
+                        buffer[max_len] = '\0';
                         params[1] += max_len;
                         reply(server_info, sendTo,
                               "%s",
@@ -877,10 +878,28 @@ void cmdPmsg(CMD_ARGS)
                         if (cli == other) {
                             continue;
                         } else {
+                            //CHOICE:
+                            //allow long (> 512b) messages, send in smaller patches
+                            int max_len = RFC_MAX_MSG_LEN - 12 - 2*RFC_MAX_NICKNAME;
+                            int msg_len = strlen(params[1]);
+                            int num_patches = msg_len / max_len;
+
+                            int i;
+                            char buffer[max_len+1];
                             reply(server_info, other,
-                                  ":%s PRIVMSG %s :%s\r\n",
+                                  ":%s PRIVMSG %s :",
                                   cli->nick,
-                                  target,
+                                  target);
+                            for (i = 0; i < num_patches; i++) {
+                                strncpy(buffer, params[1], max_len);
+                                buffer[max_len] = '\0';
+                                params[1] += max_len;
+                                reply(server_info, other,
+                                      "%s",
+                                      buffer);
+                            }
+                            reply(server_info, other,
+                                  "%s\r\n",
                                   params[1]);
                         }
                     }
