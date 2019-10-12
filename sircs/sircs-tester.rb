@@ -229,6 +229,7 @@ class IRC
         if(data[2] =~ /^:[^ ]+ *323 *rui *:End of \/LIST/)
             puts "\tRPL_LISTEND 323 correct"
         else
+            puts data[2]
             puts "\tRPL_LISTEND 323 incorrect"
             return false
         end
@@ -301,15 +302,15 @@ class IRC
   def invalid_chan(s)
       send("JOIN #{s}")
 
-      data = recv_data_from_server(1);
+      data = recv_data_from_server(5);
 
       ss = s[0,9]
 
-      if(data[0] =~ /^:[^ ]+ *432  *#{ss} *:Erroneus nickname */)
+      if(data.size == 1 and data[0] =~ /^:[^ ]+ *403 *rui *#{ss} *:No such channel */)
           return true
       else
           puts data
-          puts "NICK " +s+ " should return ERR_ERRONEUSNICKNAME and nothing more"
+          puts "JOIN " +s+ " should return ERR_NOSUCHCHANNEL"
           return false
       end
   end
@@ -477,6 +478,12 @@ begin
 ############## INVALID_CHANNAME ###################
 # <channel> ::= ('#' | '&') <chstring>
 # <channel> cannot consist of more than 9 characters
+
+    tn = test_name("NO_LEADING_#&")
+    eval_test(tn, nil, nil, irc.invalid_chan("channel"))
+
+    tn = test_name("LONG_CHANNAME")
+    eval_test(tn, nil, nil, irc.invalid_chan("#lololololololololololololololo"))
 
 ############## LONG_PRIVMSG ###################
 # When sending a very long PRIVMSG, the message should
