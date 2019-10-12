@@ -123,6 +123,11 @@ int main(int argc, char *argv[] ){
     init_list(clients);
     server_info.clients = clients;
     
+    // Zombie client list
+    LinkedList* zombies = malloc(sizeof(LinkedList));
+    init_list(zombies);
+    server_info.zombies = zombies;
+    
     // Channel list
     LinkedList* channels = malloc(sizeof(LinkedList));
     init_list(channels);
@@ -147,6 +152,7 @@ int main(int argc, char *argv[] ){
         }
         else // ready > 0
         {
+            DPRINTF(DEBUG_CLIENTS, "\n");
             // Accept a new connection
             if (FD_ISSET(listenfd, &fds))
             {

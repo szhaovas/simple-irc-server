@@ -24,6 +24,7 @@ typedef struct {
     char hostname[MAX_HOSTNAME];
     LinkedList* clients;
     LinkedList* channels;
+    LinkedList* zombies;
 } server_info_t;
 
 struct __channel_struct {
@@ -36,6 +37,7 @@ struct __client_struct {
     struct sockaddr_in cliaddr;
     unsigned inbuf_size;
     int registered;
+    int zombie;
     char hostname[MAX_HOSTNAME];
     char servername[MAX_SERVERNAME]; // FIXME: not used, so can be removed
     char user[MAX_USERNAME];
