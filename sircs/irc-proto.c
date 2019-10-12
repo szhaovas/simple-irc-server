@@ -231,6 +231,14 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
             else if (nparams < cmds[i].minparams)
             {
                 // ERROR - the client didn't specify enough parameters for this command
+                //There are commands that need to return erros more specific than ERR_NEEDMOREPARAMS
+                //NICK: ERR_NONICKNAMEGIVEN
+                //PRIVMSG: ERR_NORECIPIENT, ERR_NOTEXTTOSEND
+                if (!strcasecmp(command, "NICK") || !strcasecmp(command, "PRIVMSG")) {
+                    //ignore minparams restriction and pass down to command handlers
+                    (*cmds[i].handler)(server_info, cli, params, nparams);
+                    return;
+                }
                 reply(server_info, cli,
                       ":%s %d %s %s :Not enough parameters\r\n",
                       server_info->hostname,
@@ -450,7 +458,7 @@ channel_t* find_channel_by_name(server_info_t* server_info, char* target_name)
     } /* Iterator loop */
     iter_clean(it);
     return NULL;
-    }
+}
 
 
 /**
@@ -497,6 +505,15 @@ void echo_message(server_info_t* server_info,
  */
 void cmdNick(CMD_ARGS)
 {
+    //if nparmas = 0, reply ERR_NONICKNAMEGIVEN
+    if (!nparams) {
+        reply(server_info, cli,
+              ":%s %d %s :No nickname given\r\n",
+              server_info->hostname,
+              ERR_NONICKNAMEGIVEN,
+              *cli->nick? cli->nick: "*");
+        return;
+    }
     int nick_valid = is_nickname_valid(params[0]);
     if (!nick_valid)
     {
@@ -803,7 +820,7 @@ void cmdPart(CMD_ARGS)
 void cmdList(CMD_ARGS)
 {
     reply(server_info, cli,
-          "%s %d %s Channel :Users\r\n",
+          ":%s %d %s Channel :Users\r\n",
           server_info->hostname,
           RPL_LISTSTART,
           cli->nick);
@@ -812,7 +829,7 @@ void cmdList(CMD_ARGS)
     {
         channel_t* ch = (channel_t *) iter_get(it);
         reply(server_info, cli,
-              "%s %d %s %s %d :\r\n",
+              ":%s %d %s %s %d :\r\n",
               server_info->hostname,
               RPL_LIST,
               cli->nick,
@@ -822,7 +839,7 @@ void cmdList(CMD_ARGS)
     iter_clean(it);
     
     reply(server_info, cli,
-          "%s %d %s :End of /LIST\r\n",
+          ":%s %d %s :End of /LIST\r\n",
           server_info->hostname,
           RPL_LISTEND,
           cli->nick);
@@ -834,7 +851,108 @@ void cmdList(CMD_ARGS)
  */
 void cmdPmsg(CMD_ARGS)
 {
-    /* do something */
+    //server_info_t* server_info, client_t* cli, char **params, int nparams
+    //<target>{,<target>} <text to be sent>
+    //ERR_NORECIPIENT
+    //ERR_NOTEXTTOSEND
+    //ERR_NOSUCHNICK (when cannot find nick/channame?)
+    
+    //Since there is no way to tell between target and text_to_send
+    //if nparams == 0 then reply ERR_NORECIPIENT
+    //if nparams == 1 then reply ERR_NOTEXTTOSEND
+    if (!nparams) {
+        reply(server_info, cli,
+              ":%s %d %s :No recipient given (PRIVMSG)\r\n",
+              server_info->hostname,
+              ERR_NORECIPIENT,
+              cli->nick);
+        return;
+    } else if (nparams == 1) {
+        reply(server_info, cli,
+              ":%s %d %s :No text to send\r\n",
+              server_info->hostname,
+              ERR_NOTEXTTOSEND,
+              cli->nick);
+        return;
+    }
+    
+    //parsing targets by ","
+    char *str = strdup(params[0]);
+    char *target = strtok(str, ",");
+    while(target) {
+        int is_valid_target = 0;
+        
+        //if target is the sending client itself, ignore without replying error
+        if (!strcmp(target, cli->nick)) {
+            //go to next target
+            target = strtok(NULL, ",");
+            continue;
+        }
+        
+        //is target a client?
+        if (is_nickname_valid(target, strlen(target))) {
+            ITER_LOOP(c, server_info->clients)
+            {
+                client_t* sendTo = (client_t *) iter_get(c);
+                if (!strcmp(target, sendTo->nick)) {
+                    //yes, target is a client
+                    //send to the client
+                    reply(server_info, sendTo,
+                          ":%s PRIVMSG %s :%s\r\n",
+                          cli->nick,
+                          target,
+                          params[1]);
+                    is_valid_target = 1;
+                    break;
+                }
+            }
+            iter_clean(c);
+        }
+        //is target a channel?
+        //if target is a client, skip this part
+        else if (is_channel_valid(target)) {
+            ITER_LOOP(ch, server_info->channels)
+            {
+                channel_t* sendTo = (channel_t *) iter_get(ch);
+                if (!strcmp(target, sendTo->name)) {
+                    //yes, target is a channel
+                    //send to every member except the sender client
+                    Iterator_LinkedList* m;
+                    for (m = iter(sendTo->members); !iter_empty(m); iter_next(m)) {
+                        
+                        client_t* other = (client_t *) iter_get(m);
+                        if (cli == other) {
+                            continue;
+                        } else {
+                            reply(server_info, other,
+                                  ":%s PRIVMSG %s :%s\r\n",
+                                  cli->nick,
+                                  target,
+                                  params[1]);
+                        }
+                    }
+                    iter_clean(m);
+                    is_valid_target = 1;
+                    break;
+                }
+            }
+            iter_clean(ch);
+        }
+        
+        //this target is neither a client nor a channel, return ERR_NOSUCHNICK
+        //FIX: print two nicks? ---------------------------------------------------------------------------------------------------------------------------------------
+        if (!is_valid_target) {
+            reply(server_info, cli,
+                  ":%s %d %s %s :No such nick/channel\r\n",
+                  server_info->hostname,
+                  ERR_NOSUCHNICK,
+                  target,
+                  target);
+        }
+        
+        //go to next target
+        target = strtok(NULL, ",");
+    }
     
 }
 
