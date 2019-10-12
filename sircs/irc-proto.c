@@ -357,24 +357,27 @@ int check_collision(char* this, char* that)
 /**
  * Send MOTD messages.
  */
-void motd(int sock, char* hostname)
+void motd(char* nickname, int sock, char* hostname)
 {
     WRITE(sock,
-          ":%s %d :- %s Message of the day - \r\n",
+          ":%s %d %s :- %s Message of the day - \r\n",
           hostname,
           RPL_MOTDSTART,
+          nickname,
           hostname);
 
     WRITE(sock,
-          ":%s %d :- %s\r\n",
+          ":%s %d %s :- %s\r\n",
           hostname,
           RPL_MOTD,
+          nickname,
           MOTD_STR);
 
     WRITE(sock,
-          ":%s %d :End of /MOTD command\r\n",
+          ":%s %d %s :End of /MOTD command\r\n",
           hostname,
-          RPL_ENDOFMOTD);
+          RPL_ENDOFMOTD,
+          nickname);
 }
 
 
@@ -558,7 +561,7 @@ void cmdNick(CMD_ARGS)
         if (!cli->registered && *cli->user)
         {
             cli->registered = 1;
-            motd(cli->sock, server_info->hostname);
+            motd(cli->nick, cli->sock, server_info->hostname);
         }
     }
 }
@@ -593,7 +596,7 @@ void cmdUser(CMD_ARGS){
     if (!cli->registered && *cli->nick)
     {
         cli->registered = 1;
-        motd(cli->sock, server_info->hostname);
+        motd(cli->nick , cli->sock, server_info->hostname);
     }
 }
 
@@ -708,7 +711,7 @@ void cmdJoin(CMD_ARGS)
 
         // REPLY - End
         WRITE(cli->sock,
-              ":%s %d %s %s :End of channel members\r\n",
+              ":%s %d %s %s :End of /NAMES list\r\n",
               server_info->hostname,
               RPL_ENDOFNAMES,
               cli->nick,
@@ -775,7 +778,7 @@ void cmdPart(CMD_ARGS)
 void cmdList(CMD_ARGS)
 {
     WRITE(cli->sock,
-          "%s %d %s Channel :Users\r\n",
+          ":%s %d %s Channel :Users Name\r\n",
           server_info->hostname,
           RPL_LISTSTART,
           cli->nick);
@@ -784,7 +787,7 @@ void cmdList(CMD_ARGS)
     {
         channel_t* ch = (channel_t *) iter_get(it);
         WRITE(cli->sock,
-              "%s %d %s %s %d :\r\n",
+              ":%s %d %s %s.%d\r\n",
               server_info->hostname,
               RPL_LIST,
               cli->nick,
@@ -794,7 +797,7 @@ void cmdList(CMD_ARGS)
     iter_clean(it);
 
     WRITE(cli->sock,
-          "%s %d %s :End of /LIST\r\n",
+          ":%s %d %s :End of /LIST\r\n",
           server_info->hostname,
           RPL_LISTEND,
           cli->nick);
@@ -854,10 +857,9 @@ void cmdPmsg(CMD_ARGS)
               //yes, target is a client
               //send to the client
               WRITE(sendTo->sock,
-                    ":%s!%s@%s :%s\r\n",
+                    ":%s PRIVMSG %s :%s\r\n",
                     cli->nick,
-                    cli->user,
-                    cli->hostname,
+                    target,
                     params[1]);
               is_valid_target = 1;
               break;
@@ -883,10 +885,9 @@ void cmdPmsg(CMD_ARGS)
                           continue;
                       } else {
                           WRITE(other->sock,
-                                ":%s!%s@%s :%s\r\n",
+                                ":%s PRIVMSG %s :%s\r\n",
                                 cli->nick,
-                                cli->user,
-                                cli->hostname,
+                                target,
                                 params[1]);
                       }
                   }
