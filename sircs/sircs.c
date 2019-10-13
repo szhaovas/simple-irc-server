@@ -172,7 +172,8 @@ int main(int argc, char *argv[] ){
                         // close this connection and remove associated state info
                         if (__rc < 0)
                         {
-                            DPRINTF(DEBUG_CLIENTS, "Client fd=%i closed the connection.\n", sock);
+                            DPRINTF(DEBUG_CLIENTS, "Client fd=%i closed the connection\n", sock);
+                            cli->registered = 1;
                             handleLine("QUIT", &server_info, cli);
                         }
                     }

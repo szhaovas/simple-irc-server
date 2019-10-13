@@ -191,7 +191,7 @@ class IRC
 
         data = recv_data_from_server(1);
 
-        if(data[0] =~ /^:[^ ]+ *352 *rui *#{s} *myUsername *[^ ]+ *[^ ]+ *rui *H *:0 */)
+        if(data[0] =~ /^:[^ ]+ *352 *rui *#{s} *myUsername *[^ ]+ *[^ ]+ *rui *H *:0 */) #fix---------------------------------------------------------------------
             puts "\tRPL_WHOREPLY 352 correct"
         else
             puts data
@@ -219,7 +219,8 @@ class IRC
             return false
         end
 
-        if(data[1] =~ /^:[^ ]+ *322 *rui *#linux.*1/)
+
+        if(data[1] =~ /^:[^ ]+ *322 *rui *#linux *1/) #fix---------------------------------------------------------------------------------------------------------
             puts "\tRPL_LIST 322 correct"
         else
             puts "\tRPL_LIST 322 incorrect"
@@ -229,6 +230,7 @@ class IRC
         if(data[2] =~ /^:[^ ]+ *323 *rui *:End of \/LIST/)
             puts "\tRPL_LISTEND 323 correct"
         else
+            puts data[2]
             puts "\tRPL_LISTEND 323 incorrect"
             return false
         end
@@ -259,12 +261,12 @@ class IRC
 
     def part_channel(parter, channel)
         send("PART #{channel}")
-	reply_matches(/^:#{parter}![^ ]+@[^ ]+ *QUIT *:/)
+	reply_matches(/^:#{parter}![^ ]+@[^ ]+ *QUIT *:/) #fix----------------------------------------------------------------
 
     end
 
     def check_part(parter, channel)
-	reply_matches(/^:#{parter}![^ ]+@[^ ]+ *QUIT *:/)
+	reply_matches(/^:#{parter}![^ ]+@[^ ]+ *QUIT *:/) #fix----------------------------------------------------------------
     end
 
     def ignore_reply
@@ -281,6 +283,38 @@ class IRC
 	    return false
 	end
     end
+
+  def invalid_nick(s)
+      send("NICK #{s}")
+
+      data = recv_data_from_server(1);
+
+      ss = s[0,9]
+
+      if(data.size == 1 and data[0] =~ /^:[^ ]+ *432 \* *#{ss} *:Erroneus nickname */)
+          return true
+      else
+          puts data
+          puts "NICK " +s+ " should return ERR_ERRONEUSNICKNAME and nothing more"
+          return false
+      end
+  end
+
+  def invalid_chan(s)
+      send("JOIN #{s}")
+
+      data = recv_data_from_server(5);
+
+      ss = s[0,9]
+
+      if(data.size == 1 and data[0] =~ /^:[^ ]+ *403 *rui *#{ss} *:No such channel */)
+          return true
+      else
+          puts data
+          puts "JOIN " +s+ " should return ERR_NOSUCHCHANNEL"
+          return false
+      end
+  end
 
 end
 
@@ -328,8 +362,8 @@ begin
 # The RFC states that there is no response to a NICK command,
 # so we test for this.
     tn = test_name("NICK")
-    irc.send_nick("ruii")
-    puts "<-- Testing for silence (5 seconds)..."
+    irc.send_nick("rui")
+    puts "<-- Testing for silence (1 seconds)..."
 
     eval_test(tn, nil, nil, irc.test_silence(1))
 
@@ -346,7 +380,7 @@ begin
     irc.connect()
 
     irc.send_user("myUsername myHostname myServername :My real name")
-    puts "<-- Testing for silence (5 seconds)..."
+    puts "<-- Testing for silence (1 seconds)..."
 
     eval_test(tn, nil, "should not return a response on its own",
 	      irc.test_silence(1))
@@ -429,7 +463,40 @@ begin
 	      irc.check_part("rui2", "#linux"))
 
 ## Your tests go here!
-#
+
+############## INVALID_NICKNAME ###################
+# <nick> ::= <letter> { <letter> | <number> | <special> }
+# <nick> cannot consist of more than 9 characters
+
+    tn = test_name("SPEC_CHAR_NICKNAME")
+    irc3 = IRC.new($SERVER, $PORT, '', '')
+    irc3.connect()
+    eval_test(tn, nil, nil, irc3.invalid_nick("#Datroll"))
+
+    tn = test_name("LONG_NICKNAME")
+    eval_test(tn, nil, nil, irc3.invalid_nick("lololololololololololololololo"))
+    irc3.disconnect()
+
+############## INVALID_CHANNAME ###################
+# <channel> ::= ('#' | '&') <chstring>
+# <channel> cannot consist of more than 9 characters
+
+    tn = test_name("NO_LEADING_#&")
+    eval_test(tn, nil, nil, irc.invalid_chan("channel"))
+
+    tn = test_name("LONG_CHANNAME")
+    eval_test(tn, nil, nil, irc.invalid_chan("#lololololololololololololololo"))
+
+############## LONG_PRIVMSG ###################
+# When sending a very long PRIVMSG, the message should
+# be split and sent in multiple patches
+    tn = test_name("LONG_PRIVMSG")
+    msg = str = "a" * 1000
+    irc2.send_privmsg("rui", msg)
+    eval_test(tn, nil, nil, irc.checkmsg("rui2", "rui", msg))
+
+############## LONG_PRIVMSG ###################
+
 # Things you might want to test:
 #  - Multiple clients in a channel
 #  - Abnormal messages of various sorts
