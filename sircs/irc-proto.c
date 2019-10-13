@@ -86,13 +86,13 @@ void vreply(server_info_t* server_info,  client_t* cli, Node* cli_node,
         // Copy args for debug printing
         va_list args_copy;
         va_copy(args_copy, args);
-        DEBUG_PRINTF(DEBUG_REPLIES, ">>>>> Reply >>>>>>>>>\n");
         DEBUG_PRINTF(DEBUG_REPLIES, "+--------------------------------+\n");
         DEBUG_PRINTF(DEBUG_REPLIES, "|         To: (fd=%d) %9s   |\n", cli->sock, (*cli->nick)?cli->nick:"*");
         DEBUG_PRINTF(DEBUG_REPLIES, "+--------------------------------+\n");
         DEBUG_PRINTF(DEBUG_REPLIES, "| ");
         DEBUG_VPRINTF(DEBUG_REPLIES, format, args_copy);
         DEBUG_PRINTF(DEBUG_REPLIES, "|                                |\n");
+        DEBUG_PRINTF(DEBUG_REPLIES, "+------------------------- End --+\n\n");
         DEBUG_PRINTF(DEBUG_REPLIES, "+------------------------- End --+\n\n");
         va_end(args_copy);
         
