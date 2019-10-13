@@ -20,15 +20,18 @@ DEFS 		=
 all: sircs
 
 
-sircs: sircs.c sircs.h irc-proto.o debug.o
+sircs: sircs.c sircs.h irc-proto.o debug.o linked-list.o
 	$(CC) $(DEFS) $(CFLAGS) -c sircs.c
-	$(LD) -o $@ $(LDFLAGS) sircs.o irc-proto.o debug.o $(LIB)
+	$(LD) -o $@ $(LDFLAGS) sircs.o irc-proto.o debug.o linked-list.o $(LIB)
 
 debug.o: debug-text.h debug.c debug.h
 	$(CC) $(DEFS) $(CFLAGS) -c debug.c
 
 irc-proto.o: irc-proto.c irc-proto.h
 	$(CC) $(DEFS) $(CFLAGS) -c irc-proto.c
+
+linked-list.o: linked-list.c linked-list.h
+	$(CC) $(DEFS) $(CFLAGS) -c linked-list.c
 
 debug-text.h: debug.h
 	./dbparse.pl < debug.h > debug-text.h
