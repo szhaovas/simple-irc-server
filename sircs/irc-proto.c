@@ -148,7 +148,7 @@ void handle_line(char* line, server_info_t* server_info, client_t* cli, Node* cl
     if (!command || *command == '\0'){
         // ERROR - unknown command
         reply(server_info, cli, cli_node,
-              ":%s %d %s * :Unknown command\r\n", // Cannot use |command| in this message
+              ":%s %d %s * :Unknown command\r\n", // CHOICE: Cannot use |command| in this message
               server_info->hostname,
               ERR_NEEDMOREPARAMS,
               target);
@@ -160,7 +160,7 @@ void handle_line(char* line, server_info_t* server_info, client_t* cli, Node* cl
     if (*command == '\0'){
         // ERROR - unknown command
         reply(server_info, cli, cli_node,
-              ":%s %d %s * :Unknown command\r\n", // Cannot use |command| in this message
+              ":%s %d %s * :Unknown command\r\n", // CHOICE: Cannot use |command| in this message
               server_info->hostname,
               ERR_NEEDMOREPARAMS,
               target);
@@ -505,7 +505,7 @@ void cmdNick(CMD_ARGS)
     // ERROR - Invalid nickname
     else if (!is_nickname_valid(params[0]))
     {
-        GET_SAFE_NAME(nick_safe, params[0]);
+        GET_SAFE_NAME(nick_safe, params[0]); // CHOICE: truncate if requested name too long
         reply(server_info, cli, cli_node,
               ":%s %d %s %s :Erroneus nickname\r\n",
               server_info->hostname,
@@ -522,9 +522,8 @@ void cmdNick(CMD_ARGS)
             client_t* other = (client_t *) iter_get_item(it);
             if (other != cli &&
                 *other->nick &&
-                // Note: we should not check |registered| here,
+                // CHOICE: we do not check |registered| here,
                 // because two unregistered clients may still have colliding nicknames
-                // FIXME: Note this in the design doc
                 check_collision(nick, other->nick))
             {
                 // ERROR - Nickname collision
@@ -649,12 +648,12 @@ void cmdQuit(CMD_ARGS)
  */
 void cmdJoin(CMD_ARGS)
 {
-    // FIXME: parse target list
-    char* channel_to_join = params[0];
     // CHOICE: If there is a list of targets, pick the first one and ignore the rest
+    char* channel_to_join = params[0];
     char* comma = strchr(channel_to_join, ',');
     if (comma)
-    *comma = '\0'; // Replace ',' with '\0' to take only the first target
+        *comma = '\0'; // Replace ',' with '\0' to take only the first channel name
+    
     if ( !is_channel_valid(channel_to_join) )
     {
         GET_SAFE_NAME(chname_safe, channel_to_join);
@@ -672,16 +671,15 @@ void cmdJoin(CMD_ARGS)
         {
             // Join a channel of which the client is already a member => Do nothing
             if ( ch_found && !strcmp(cli->channel->name, ch_found->name) ) return;
+            // ECHO - QUIT to members of the previous channel
+            // (but client still connected, so cannot reuse cmdQuit)
             echo_message(server_info, cli, TRUE,
-                         ":%s!%s@%s QUIT :Client left channel\r\n", // FIXME: client gets QUIT back. This is weird
+                         ":%s!%s@%s QUIT :Client left channel\r\n", // CHOICE: The joiner also gets back QUIT
                          cli->nick,
                          cli->user,
                          cli->hostname);
             remove_client_from_channel(server_info, cli, cli_node);
             cli->channel = NULL;
-            // Echo QUIT to members of the previous channel
-            // (but client still connected, so cannot reuse cmdQuit)
-            
         }
         // Client is no longer in any channel at this point
         if (!ch_found) // Create the channel if it doesn't exist yet
@@ -736,12 +734,10 @@ void cmdJoin(CMD_ARGS)
  */
 void cmdPart(CMD_ARGS)
 {
-    // FIXME: parse target list
     char* channel_to_part = params[0];
-    // CHOICE: If there is a list of targets, pick the first one and ignore the rest
     char* comma = strchr(channel_to_part, ',');
     if (comma)
-    *comma = '\0'; // Replace ',' with '\0' to take only the first target
+        *comma = '\0'; // Replace ',' with '\0' to take only the first target
     
     // Find the channel the client wishes to part
     channel_t* ch_found = find_channel_by_name(server_info, channel_to_part);
@@ -767,7 +763,7 @@ void cmdPart(CMD_ARGS)
     else // Client is indeed in the channel to part
     {
         echo_message(server_info, cli, TRUE,
-                     ":%s!%s@%s QUIT :\r\n", // FIXME: client gets QUIT back. This is weird
+                     ":%s!%s@%s QUIT :\r\n", // CHOICE: The joiner also gets back QUIT
                      cli->nick,
                      cli->user,
                      cli->hostname);
@@ -821,8 +817,6 @@ void cmdPmsg(CMD_ARGS)
      * Thus, we assume that the first param must be the target name.
      *   If nparams == 0, then reply ERR_NORECIPIENT.
      *   If nparams == 1, then reply ERR_NOTEXTTOSEND.
-     *
-     * FIXME: Note this in the design doc
      */
     if (nparams == 0)
     {
@@ -921,14 +915,16 @@ void cmdWho(CMD_ARGS)
 {
     // No <name> is given=> Return all visible users
     // As per RFC:
-    // In the absence of the <name> parameter, all visible (users who aren't invisible (user mode +i)
-    // and who don't have a common channel with the requesting client) are listed
+    //   In the absence of the <name> parameter, all visible (users who aren't invisible (user mode +i)
+    //   and who don't have a common channel with the requesting client) are listed
     if (!nparams)
     {
         ITER_LOOP(it, server_info->clients)
         {
             client_t* other = iter_get_item(it);
-            if (cli->channel && other->channel && other->channel != cli->channel)
+            if (!cli->channel   || // No common channel if one of them doesn't have a channel
+                !other->channel ||
+                (other->channel != cli->channel))
             {
                 // RFC: <channel> <user> <host> <server> <nick> <H|G>[*][@|+] :<hopcount> <real name>
                 reply(server_info, cli, cli_node,
@@ -954,17 +950,15 @@ void cmdWho(CMD_ARGS)
     }
     else
     {
-        char* item_start = params[0]; // Start of possilby a list
-        char* item_end;
-        do // FIXME: use strsep
+        char *to_free, *target_list;
+        to_free = target_list = strdup(params[0]);
+        char* target = strtok(target_list, ",");
+        while (target)
         {
-            item_end = strchr(item_start, ',');
-            if (item_end)
-            *item_end = '\0';
-            GET_SAFE_NAME(safe_query, item_start);
-            channel_t* ch_match = find_channel_by_name(server_info, safe_query);
-            // As per RFC annotation:
+            // As per CMPU-375 RFC Note:
             // Your server should match <name> against channel name only
+            GET_SAFE_NAME(safe_query, target);
+            channel_t* ch_match = find_channel_by_name(server_info, safe_query);
             if (ch_match)
             {
                 // Loop through all members of that channel
@@ -980,8 +974,7 @@ void cmdWho(CMD_ARGS)
                           other->hostname,
                           server_info->hostname,
                           other->nick,
-                          other->realname
-                          );
+                          other->realname);
                 } /* Iterator loop */
                 ITER_END(it_cli);
             }
@@ -992,8 +985,9 @@ void cmdWho(CMD_ARGS)
                   RPL_ENDOFWHO,
                   cli->nick,
                   safe_query);
-            if (item_end)
-            item_start = item_end + 1;
-        } while (item_end);
+            
+            target = strtok(NULL, ",");
+        }
+        free(to_free);
     }
 }
