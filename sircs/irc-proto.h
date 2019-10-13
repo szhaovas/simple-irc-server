@@ -49,6 +49,6 @@ typedef enum {
 } rpl_t;
 
 
-void handle_line(char* line, server_info_t* server_info, client_t* cli, Node* cli_node);
+void handle_line(char* line, server_info_t* server_info, client_t* cli);
 
 #endif /* _IRC_PROTO_H_ */

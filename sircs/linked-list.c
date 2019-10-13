@@ -66,9 +66,12 @@ Node* add_item(LinkedList* list, void* item)
 void* drop_node(LinkedList* list, Node* node)
 {
     assert(node);
-    node->__valid = FALSE;
-    list->size -= 1;
-    list->__has_invalid = TRUE;
+    if (node->__valid)
+    {
+        node->__valid = FALSE;
+        list->size -= 1;
+        list->__has_invalid = TRUE;
+    }
     return node->item;
 }
 

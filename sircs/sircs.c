@@ -162,16 +162,15 @@ int main(int argc, char *argv[] ){
             ITER_LOOP(it, server_info.clients)
             {
                 client_t* cli = (client_t *) iter_get_item(it);
-                Node* cli_node = iter_get_node(it);
                 if (FD_ISSET(cli->sock, &fds))
                 {
                     DEBUG_PRINTF(DEBUG_CLIENTS, "Active fd=%i\n", cli->sock);
-                    __rc = handle_data(&server_info, cli, cli_node);
+                    __rc = handle_data(&server_info, cli);
                     // If something went wrong, fake a QUIT command
                     if (__rc < 0)
                     {
                         cli->registered = 1; // Ugly but quick fix
-                        handle_line("QUIT", &server_info, cli, cli_node);
+                        handle_line("QUIT", &server_info, cli);
                     }
                 }
             } /* Iterator loop */
@@ -306,7 +305,7 @@ int handle_new_connection(int listenfd, LinkedList* clients)
 
 /* Handle new input data from the client.
  */
-int handle_data(server_info_t* server_info, client_t* cli, Node* cli_node)
+int handle_data(server_info_t* server_info, client_t* cli)
 {
     // Precondition:
     // Client's input buffer must contain less than RFC_MAX_MSG_LEN bytes
@@ -384,7 +383,7 @@ int handle_data(server_info_t* server_info, client_t* cli, Node* cli_node)
         else if (strlen(msg) <= RFC_MAX_MSG_LEN)
         {
             DEBUG_PRINTF(DEBUG_SPLIT, "Message looks good (%lu bytes): %s\n", strlen(msg), msg);
-            handle_line(msg, server_info, cli, cli_node);
+            handle_line(msg, server_info, cli);
         }
         // Else, this new message is too long and we ignore it
         else
@@ -431,8 +430,9 @@ int handle_data(server_info_t* server_info, client_t* cli, Node* cli_node)
         strcpy(cli->inbuf, tmp);
         cli->inbuf_size = remaining_msg_len;
         
-        DEBUG_PRINTF(DEBUG_SPLIT, "Incomplete msg (%lu bytes):\n%s\nWe'll handle this later\n", strlen(cli
-                                                                                                       ->inbuf), cli->inbuf);
+        DEBUG_PRINTF(DEBUG_SPLIT,
+                     "Incomplete msg (%lu bytes):\n%s\nWe'll handle this later\n",
+                     strlen(cli->inbuf), cli->inbuf);
 //        print_hex(DEBUG_INPUT, cli->inbuf, MAX_MSG_LEN);
 //        DEBUG_PRINTF(DEBUG_INPUT, "\n");
     }

@@ -56,7 +56,7 @@ We have placed the word `CHOICE` next to the code for which the RFC does not spe
 
 8. Command USER: If the client issues multiple USER commands before being registered (i.e. issuing a valid NICK command), then existing client information is silently overwritten by each USER command.
 
-9. Command JOIN: If the parameter is a list of channels, we only attempt to make the client join the first channel, and ignore the rest.
+9. Command JOIN: If the parameter is a list of channels, we only help the client join the first channel, and ignore the rest.
 
 10. Command PART: If the parameter is a list of channels, we attempt to remove the client from each channel (even though the client can be a member of at most one channel from the list). For each channel of which the client is not a member, we give a not-on-channel error.
 
