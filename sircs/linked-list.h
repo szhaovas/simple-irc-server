@@ -5,7 +5,7 @@
 struct _node_struct {
     struct _node_struct* prev;
     struct _node_struct* next;
-    void* data;
+    void* item;
     int __id;
     int __valid;
 };
@@ -25,13 +25,13 @@ typedef struct {
 
 void init_list(LinkedList* list);
 
-Node* add_item(LinkedList* list, void* data);
+Node* add_item(LinkedList* list, void* item);
 
-int find_item(LinkedList* list, void* data);
-
-void find_and_drop_item(LinkedList* list, void* data);
+Node* find_item(LinkedList* list, void* item);
 
 void* drop_node(LinkedList* list, Node* node);
+
+void* find_and_drop_item(LinkedList* list, void* item);
 
 char* list_to_str(LinkedList* list, char* buf);
 
@@ -65,9 +65,9 @@ int iter_empty(Iterator_LinkedList* it);
 
 void iter_next(Iterator_LinkedList* it);
 
-void* iter_get(Iterator_LinkedList* it);
+void* iter_get_item(Iterator_LinkedList* it);
 
-Node* iter_add(Iterator_LinkedList* it, void* data);
+Node* iter_get_node(Iterator_LinkedList* it);
 
 void* iter_drop_curr(Iterator_LinkedList* it);
 

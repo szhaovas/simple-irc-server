@@ -161,7 +161,7 @@ int main(int argc, char *argv[] ){
             // Check activities from connected sockets
             ITER_LOOP(it, server_info.clients)
             {
-                client_t* cli = (client_t *) iter_get(it);
+                client_t* cli = (client_t *) iter_get_item(it);
                 {
                     int sock = cli->sock;
                     if (FD_ISSET(sock, &fds))
@@ -200,7 +200,7 @@ int build_fd_set(fd_set *fds, int listenfd, LinkedList* clients)
     // update highfd
     ITER_LOOP(it, clients)
     {
-        client_t* cli = (client_t *) iter_get(it);
+        client_t* cli = (client_t *) iter_get_item(it);
         int fd = cli->sock;
         FD_SET(fd, fds); // Register this socket
         if (fd > highfd) // Update |highfd| if necessary

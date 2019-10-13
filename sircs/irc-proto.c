@@ -228,7 +228,7 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
                  !iter_empty(it);
                  iter_next(it))
             {
-                client_t* zombie = iter_get(it);
+                client_t* zombie = iter_get_item(it);
                 iter_drop_curr(it);
                 free(zombie);
             }
@@ -420,7 +420,7 @@ channel_t* find_channel_by_name(server_info_t* server_info, char* target_name)
 {
     ITER_LOOP(it, server_info->channels)
     {
-        channel_t* ch = (channel_t *) iter_get(it);
+        channel_t* ch = (channel_t *) iter_get_item(it);
         if ( !strncmp(target_name, ch->name, RFC_MAX_NICKNAME+1) )
         {
             iter_clean(it);
@@ -449,7 +449,7 @@ void echo_message(server_info_t* server_info,
         // Loop through members from the client's channel
         ITER_LOOP(it, cli->channel->members)
         {
-            client_t* other = (client_t *) iter_get(it);
+            client_t* other = (client_t *) iter_get_item(it);
             // Echo message
             if (other != cli || echo_to_themselves)
             {
@@ -499,7 +499,7 @@ void cmdNick(CMD_ARGS)
         // Check for nickname collision
         ITER_LOOP(it, server_info->clients)
         {
-            client_t* other = (client_t *) iter_get(it);
+            client_t* other = (client_t *) iter_get_item(it);
             if (cli == other) continue;
             if (*other->nick && // Note: we should not check |registered| here,
                 // because two unregistered clients may still have colliding nicknames
@@ -528,7 +528,7 @@ void cmdNick(CMD_ARGS)
         {
             ITER_LOOP(it, cli->channel->members)
             {
-                client_t* other = (client_t *) iter_get(it);
+                client_t* other = (client_t *) iter_get_item(it);
                 if (cli == other) continue;
                 reply(server_info, other,
                       ":%s!%s@%s NICK %s\r\n",
@@ -682,7 +682,7 @@ void cmdJoin(CMD_ARGS)
         // REPLY - Send the list of channel members
         ITER_LOOP(jt, ch_found->members)
         {
-            client_t* other = (client_t *) iter_get(jt);
+            client_t* other = (client_t *) iter_get_item(jt);
             reply(server_info, cli,
                   ":%s %d %s = %s :%s\r\n",
                   server_info->hostname,
@@ -761,7 +761,7 @@ void cmdList(CMD_ARGS)
           cli->nick);
     ITER_LOOP(it, server_info->channels)
     {
-        channel_t* ch = (channel_t *) iter_get(it);
+        channel_t* ch = (channel_t *) iter_get_item(it);
         reply(server_info, cli,
               ":%s %d %s %s %d :\r\n",
               server_info->hostname,
@@ -822,7 +822,7 @@ void cmdPmsg(CMD_ARGS)
         if (is_nickname_valid(target)) {
             ITER_LOOP(c, server_info->clients)
             {
-                client_t* sendTo = (client_t *) iter_get(c);
+                client_t* sendTo = (client_t *) iter_get_item(c);
                 if (!strcmp(target, sendTo->nick)) {
                     //yes, target is a client
                     //send to the client
@@ -861,13 +861,13 @@ void cmdPmsg(CMD_ARGS)
             // FIXME: use find_channel_by_name
             ITER_LOOP(ch, server_info->channels)
             {
-                channel_t* sendTo = (channel_t *) iter_get(ch);
+                channel_t* sendTo = (channel_t *) iter_get_item(ch);
                 if (!strcmp(target, sendTo->name)) {
                     //yes, target is a channel
                     //send to every member except the sender client
                     Iterator_LinkedList* m;
                     for (m = iter(sendTo->members); !iter_empty(m); iter_next(m)) {
-                        client_t* other = (client_t *) iter_get(m);
+                        client_t* other = (client_t *) iter_get_item(m);
                         if (cli == other) {
                             continue;
                         } else {
@@ -932,7 +932,7 @@ void cmdWho(CMD_ARGS)
     {
         ITER_LOOP(it, server_info->clients)
         {
-            client_t* other = iter_get(it);
+            client_t* other = iter_get_item(it);
             if (cli->channel && other->channel && other->channel != cli->channel)
             {
                 // RFC: <channel> <user> <host> <server> <nick> <H|G>[*][@|+] :<hopcount> <real name>
@@ -975,7 +975,7 @@ void cmdWho(CMD_ARGS)
                 // Loop through all members of that channel
                 ITER_LOOP(it_cli, ch_match->members)
                 {
-                    client_t* other = (client_t *) iter_get(it_cli);
+                    client_t* other = (client_t *) iter_get_item(it_cli);
                     // RFC: <channel> <user> <host> <server> <nick> <H|G>[*][@|+] :<hopcount> <real name>
                     reply(server_info, cli,
                           ":%s %d %s %s %s %s %s %s H :0 %s\r\n",
