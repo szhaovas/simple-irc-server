@@ -121,21 +121,17 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
 {
     // Empty messages are silently iginored (as per RFC)
     if (*line == '\0') return;
-
     // Target name in replies
     char* target = *cli->nick ? cli->nick : "*";
-
     char *prefix = NULL, *command, *pstart, *params[MAX_MSG_TOKENS];
     int nparams = 0;
     char *trailing = NULL;
-
     DPRINTF(DEBUG_INPUT, "Handling line: %s\n", line);
     command = line;
     if (*line == ':'){
         prefix = ++line;
         command = strchr(prefix, ' ');
     }
-
     if (!command || *command == '\0'){
         // Send an unknown command error
         reply(server_info, cli,
@@ -145,11 +141,9 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
               target);
         return;
     }
-
     while (*command == ' '){
         *command++ = 0;
     }
-
     if (*command == '\0'){
         // Send an unknown command error
         reply(server_info, cli,
@@ -159,27 +153,21 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
               target);
         return;
     }
-
     pstart = strchr(command, ' ');
-
     if (pstart){
         while (*pstart == ' ')
-            *pstart++ = '\0';
-
+        *pstart++ = '\0';
         if (*pstart == ':'){
             trailing = pstart;
         } else{
             trailing = strstr(pstart, " :");
         }
-
         if (trailing){
             while (*trailing == ' ')
-                *trailing++ = 0;
-
+            *trailing++ = 0;
             if (*trailing == ':')
-                *trailing++ = 0;
+            *trailing++ = 0;
         }
-
         do{
             if (*pstart != '\0'){
                 params[nparams++] = pstart;
@@ -187,32 +175,25 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
                 break;
             }
             pstart = strchr(pstart, ' ');
-
             if (pstart){
                 while (*pstart == ' ')
-                    *pstart++ = '\0';
+                *pstart++ = '\0';
             }
         } while (pstart != NULL && nparams < MAX_MSG_TOKENS);
     }
-
     if (trailing && nparams < MAX_MSG_TOKENS){
         params[nparams++] = trailing;
     }
-
     DPRINTF(DEBUG_INPUT, "Prefix:  %s\nCommand: %s\nParams (%d):\n",
             prefix ? prefix : "<none>", command, nparams);
-
     int i;
     for (i = 0; i < nparams; i++){
         DPRINTF(DEBUG_INPUT, "   %s\n", params[i]);
     }
-
     DPRINTF(DEBUG_INPUT, "\n");
-
     // Ignore a command if provided with a prefix different from the client's nickname
     if (prefix && *cli->nick && !strcmp(prefix, cli->nick))
-        return;
-
+    return;
     for (i = 0; i < NELMS(cmds); i++)
     {
         // Specified command matches with a command (case-insensitive)
@@ -229,15 +210,6 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
             }
             else if (nparams < cmds[i].minparams)
             {
-                //There are commands that need to return erros more specific than ERR_NEEDMOREPARAMS
-                //NICK: ERR_NONICKNAMEGIVEN
-                //PRIVMSG: ERR_NORECIPIENT, ERR_NOTEXTTOSEND
-                if (!strcasecmp(command, "NICK") || !strcasecmp(command, "PRIVMSG")) {
-                    //ignore minparams restriction and pass down to command handlers
-                    (*cmds[i].handler)(server_info, cli, params, nparams);
-                    return;
-                }
-
                 // ERROR - the client didn't specify enough parameters for this command
                 reply(server_info, cli,
                       ":%s %d %s %s :Not enough parameters\r\n",
@@ -250,7 +222,6 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
             {
                 (*cmds[i].handler)(server_info, cli, params, nparams);
             }
-
             // Clean zombies
             Iterator_LinkedList* it; \
             for (it = iter(server_info->zombies);
@@ -264,7 +235,6 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
             return iter_clean(it);
         }
     }
-
     if (i == NELMS(cmds)){
         // ERROR - unknown command
         GET_SAFE_NAME(safe_command, command)
@@ -278,6 +248,16 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
     }
 }
 
+
+/**
+ * Check if a character is a special character.
+ *
+ * <special> ::=
+ *   '-'  |  '['  |  ']'  |  '\'  |  '`'  |  '^'  |  '{'  |  '}'
+ */
+#define IS_SPECIAL(c) (strchr("-[]|\\`^{}", c) != NULL)
+
+
 /**
  * Check if a character is a channel character.
  *
@@ -286,33 +266,24 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
  */
 #define IS_CH_CHAR(c) (strchr(" \a\r\n,", c) == NULL)
 
-/**
- * Check if character |c| is a special character.
- *
- * RFC Sec 2.3.1:
- *   <special> ::=
- *     '-'  |  '['  |  ']'  |  '\'  |  '`'  |  '^'  |  '{'  |  '}'
- */
-int isspecial_(char c)
-{
-    return strchr("-[]|\\`^{}", c) != NULL;
-}
-
 
 
 /**
  * Check if a nickname is valid
  *
- * From RFC:
- *   <nick> ::= <letter> { <letter> | <number> | <special> }
+ * <nick> ::= <letter> { <letter> | <number> | <special> }
  */
-int is_nickname_valid(char* nick, size_t nick_len)
+int is_nickname_valid(char* nick)
 {
-    for (int i = 0; i < nick_len; i++)
+    if (*nick == '\0')
+    return FALSE;
+    for (int i = 0; i < RFC_MAX_NICKNAME + 1; i++)
     {
+        if (nick[i] == '\0') return TRUE;
+        if (i == RFC_MAX_NICKNAME) return FALSE;
         char c = nick[i];
         if ( (i == 0 && !isalpha(c)) ||
-            (i > 0  && !(isalpha(c) || isdigit(c) || isspecial_(c))))
+            (i > 0  && !(isalpha(c) || isdigit(c) || IS_SPECIAL(c))))
         {
             return FALSE;
         }
@@ -330,7 +301,7 @@ int is_nickname_valid(char* nick, size_t nick_len)
 int is_channel_valid(char* ch_name)
 {
     if ( *ch_name != '#' && *ch_name != '&' )
-        return FALSE;
+    return FALSE;
     for (int i = 1; i < RFC_MAX_NICKNAME + 1; i++)
     {
         if (ch_name[i] == '\0') return TRUE;
@@ -354,12 +325,12 @@ int equivalent_char(char a, char b)
     if (a == b) return TRUE;
     switch (a)
     {
-        case '{': return b == '[';
-        case '}': return b == ']';
-        case '[': return b == '{';
-        case ']': return b == '}';
-        case '|': return b == '\\';
-        case '\\': return b == '|';
+            case '{': return b == '[';
+            case '}': return b == ']';
+            case '[': return b == '{';
+            case ']': return b == '}';
+            case '|': return b == '\\';
+            case '\\': return b == '|';
         default: return FALSE;
     }
 }
@@ -375,13 +346,13 @@ int check_collision(char* this, char* that)
         char ai = this[i], bi = that[i];
         // Same length && equiv chars so far => same string
         if ( ai == '\0' && bi == '\0')
-            return 1;
+        return 1;
         // Different length
         else if ( (ai == '\0') ^ (bi == '\0') )
-            return 0;
+        return 0;
         // Non-equivalent chars
         else if ( !equivalent_char(ai, bi) )
-            return 0;
+        return 0;
     }
     // End of both strings => the same len and equiv chars
     return 1;
@@ -399,14 +370,12 @@ void motd(server_info_t* server_info, client_t* cli, char* hostname)
           RPL_MOTDSTART,
           cli->nick,
           hostname);
-
     reply(server_info, cli,
           ":%s %d %s :- %s\r\n",
           hostname,
           RPL_MOTD,
           cli->nick,
           MOTD_STR);
-
     reply(server_info, cli,
           ":%s %d %s :End of /MOTD command\r\n",
           hostname,
@@ -477,7 +446,6 @@ void echo_message(server_info_t* server_info,
         // Retrieve args after |format|
         va_list args, args_copy;
         va_start(args, format);
-
         // Loop through members from the client's channel
         ITER_LOOP(it, cli->channel->members)
         {
@@ -491,7 +459,6 @@ void echo_message(server_info_t* server_info,
             }
         } /* Iterator loop */
         iter_clean(it);
-
         va_end(args); // Clean va_list
         va_end(args_copy);
     }
@@ -515,8 +482,8 @@ void cmdNick(CMD_ARGS)
               *cli->nick? cli->nick: "*");
         return;
     }
-  
-    if (!is_nickname_valid(params[0]))
+    int nick_valid = is_nickname_valid(params[0]);
+    if (!nick_valid)
     {
         GET_SAFE_NAME(nick_safe, params[0]);
         reply(server_info, cli,
@@ -524,10 +491,11 @@ void cmdNick(CMD_ARGS)
               server_info->hostname,
               ERR_ERRONEOUSNICKNAME,
               *cli->nick? cli->nick: "*",
-              nick_buf);
+              nick_safe);
     }
     else /* nick valid */
     {
+        char* nick = params[0];
         // Check for nickname collision
         ITER_LOOP(it, server_info->clients)
         {
@@ -542,22 +510,18 @@ void cmdNick(CMD_ARGS)
                       server_info->hostname,
                       ERR_NICKNAMEINUSE,
                       *cli->nick? cli->nick: "*",
-                      nick_buf);
+                      nick);
                 return iter_clean(it);
             }
         } /* Iterator loop */
         iter_clean(it);
-
         /* No collision */
-
         // Make a copy of old nickname, if any
         char old_nick[RFC_MAX_NICKNAME];
         if (*cli->nick)
-            strcpy(old_nick, cli->nick);
-
+        strcpy(old_nick, cli->nick);
         // Set client's nickname
         strcpy(cli->nick, nick); // Edge case: new nick same as old nick => No effect
-
         // If user already is in a channel
         // => Echo NICK to everyone else in the same channel
         if (cli->channel)
@@ -575,7 +539,6 @@ void cmdNick(CMD_ARGS)
             } /* Iterator loop */
             return iter_clean(it);
         }
-
         // Otherwise, the client is not in any channel, so she is either
         // (a) registered, or (b) not registered, in which case we attempt to
         // complete the registration if possible
@@ -584,7 +547,7 @@ void cmdNick(CMD_ARGS)
             cli->registered = 1;
             motd(server_info, cli, server_info->hostname);
         }
-    }
+    } /* nick valid */
 }
 
 
@@ -599,19 +562,15 @@ void cmdUser(CMD_ARGS){
               ":%s %d %s :You may not reregister\r\n",
               server_info->hostname,
               ERR_ALREADYREGISTRED,
-              *cli->nick? cli->nick: "*");
+              cli->nick);
     }
-
     // Update user information
     strncpy(cli->user, params[0], MAX_USERNAME-1);
-    strncpy(cli->servername, params[2], MAX_SERVERNAME-1);
     strncpy(cli->realname, params[3], MAX_REALNAME-1);
-
     // CHOICE:
     // If the client is not registered but already has already issued USER, i.e.,
     // she hasn't run NICK but has run USER, then existing user infomation is
     // silently overwritten
-
     // Register the client if possible
     if (!cli->registered && *cli->nick)
     {
@@ -643,15 +602,12 @@ void cmdQuit(CMD_ARGS)
         cli->zombie = TRUE;
         add_item(server_info->zombies, cli);
     }
-
     remove_client_from_channel(server_info, cli, cli->channel);
-
     echo_message(server_info, cli, FALSE,
                  ":%s!%s@%s QUIT :Connection closed\r\n",
                  cli->nick,
                  cli->user,
                  cli->hostname);
-
     cli->channel = NULL;
     // Remove client from the server's client list
     // (Junrui) FIXME: This iterates over the whole list and defeats the purpose?
@@ -659,7 +615,6 @@ void cmdQuit(CMD_ARGS)
     find_and_drop_item(server_info->clients, cli);
     // Close the connection
     close(cli->sock);
-
     // free(cli) is done after a handler returns to handleLine,
     // during the zombie-cleaning stage
 }
@@ -671,12 +626,10 @@ void cmdQuit(CMD_ARGS)
 void cmdJoin(CMD_ARGS)
 {
     char* channel_to_join = params[0];
-
     // CHOICE: If there is a list of targets, pick the first one and ignore the rest
     char* comma = strchr(channel_to_join, ',');
     if (comma)
-        *comma = '\0'; // Replace ',' with '\0' to take only the first target
-
+    *comma = '\0'; // Replace ',' with '\0' to take only the first target
     if ( !is_channel_valid(channel_to_join) )
     {
         GET_SAFE_NAME(chname_safe, channel_to_join);
@@ -690,29 +643,22 @@ void cmdJoin(CMD_ARGS)
     else /* Channel name valid */
     {
         channel_t* ch_found = find_channel_by_name(server_info, channel_to_join);
-
         if (cli->channel) // Client was previously in a channel
         {
             // Join a channel of which the client is already a member => Do nothing
             if ( ch_found && !strcmp(cli->channel->name, ch_found->name) ) return;
-          
-            // Echo QUIT to members of the previous channel
-            // (but client still connected, so cannot reuse cmdQuit)
             echo_message(server_info, cli, TRUE,
-
                          ":%s!%s@%s QUIT :Client left channel\r\n",
                          cli->nick,
                          cli->user,
                          cli->hostname);
-            remove_client_from_channel(server_info, cli, cli->channel);
             cli->channel = NULL;
-
-            
+            remove_client_from_channel(server_info, cli, cli->channel);
+            // Echo QUIT to members of the previous channel
+            // (but client still connected, so cannot reuse cmdQuit)
             
         }
-
         // Client is no longer in any channel at this point
-
         if (!ch_found) // Create the channel if it doesn't exist yet
         {
             channel_t* new_ch = malloc(sizeof(channel_t));
@@ -723,11 +669,9 @@ void cmdJoin(CMD_ARGS)
             add_item(server_info->channels, new_ch);
             ch_found = new_ch;
         }
-
         // Channel to join (ch_found) exists at this point
         add_item(ch_found->members, cli); // Add client to the member list
         cli->channel = ch_found;
-
         // ECHO - JOIN to all members, including the newly joined client
         echo_message(server_info, cli, TRUE,
                      ":%s!%s@%s JOIN %s\r\n",
@@ -735,12 +679,10 @@ void cmdJoin(CMD_ARGS)
                      cli->user,
                      cli->hostname,
                      ch_found->name);
-
         // REPLY - Send the list of channel members
         ITER_LOOP(jt, ch_found->members)
         {
             client_t* other = (client_t *) iter_get(jt);
-
             reply(server_info, cli,
                   ":%s %d %s = %s :%s\r\n",
                   server_info->hostname,
@@ -750,7 +692,6 @@ void cmdJoin(CMD_ARGS)
                   other->nick);
         } /* Iterator loop */
         iter_clean(jt);
-
         // REPLY - End
         reply(server_info, cli,
               ":%s %d %s %s :End of /NAMES list\r\n",
@@ -758,7 +699,6 @@ void cmdJoin(CMD_ARGS)
               RPL_ENDOFNAMES,
               cli->nick,
               ch_found->name);
-
     } /* Channel name valid */
 }
 
@@ -769,15 +709,12 @@ void cmdJoin(CMD_ARGS)
 void cmdPart(CMD_ARGS)
 {
     char* channel_to_part = params[0];
-
     // CHOICE: If there is a list of targets, pick the first one and ignore the rest
     char* comma = strchr(channel_to_part, ',');
     if (comma)
-        *comma = '\0'; // Replace ',' with '\0' to take only the first target
-
+    *comma = '\0'; // Replace ',' with '\0' to take only the first target
     // Find the channel the client wishes to part
     channel_t* ch_found = find_channel_by_name(server_info, channel_to_part);
-
     if (!ch_found) // ERROR - No such channel
     {
         GET_SAFE_NAME(safe_chname, channel_to_part);
@@ -800,15 +737,15 @@ void cmdPart(CMD_ARGS)
     else // Client is indeed in the channel to part
     {
         echo_message(server_info, cli, TRUE,
-             ":%s!%s@%s QUIT :\r\n",
-             cli->nick,
-             cli->user,
-             cli->hostname);
+                     ":%s!%s@%s QUIT :\r\n",
+                     cli->nick,
+                     cli->user,
+                     cli->hostname);
         
         remove_client_from_channel(server_info, cli, cli->channel);
+        
         cli->channel = NULL;
     }
-
 }
 
 
@@ -822,7 +759,6 @@ void cmdList(CMD_ARGS)
           server_info->hostname,
           RPL_LISTSTART,
           cli->nick);
-
     ITER_LOOP(it, server_info->channels)
     {
         channel_t* ch = (channel_t *) iter_get(it);
@@ -835,7 +771,6 @@ void cmdList(CMD_ARGS)
               ch->members->size);
     } /* Iterator loop */
     iter_clean(it);
-
     reply(server_info, cli,
           ":%s %d %s :End of /LIST\r\n",
           server_info->hostname,
@@ -853,7 +788,6 @@ void cmdPmsg(CMD_ARGS)
     //ERR_NORECIPIENT
     //ERR_NOTEXTTOSEND
     //ERR_NOSUCHNICK (when cannot find nick/channame?)
-
     //Since there is no way to tell between target and text_to_send
     //if nparams == 0 then reply ERR_NORECIPIENT
     //if nparams == 1 then reply ERR_NOTEXTTOSEND
@@ -872,7 +806,6 @@ void cmdPmsg(CMD_ARGS)
               cli->nick);
         return;
     }
-
     //parsing targets by ","
     char *str = strdup(params[0]);
     char *target = strtok(str, ",");
@@ -884,7 +817,7 @@ void cmdPmsg(CMD_ARGS)
             target = strtok(NULL, ",");
             continue;
         }
-
+        
         //is target a client?
         if (is_nickname_valid(target)) {
             ITER_LOOP(c, server_info->clients)
@@ -898,7 +831,7 @@ void cmdPmsg(CMD_ARGS)
                     int max_len = RFC_MAX_MSG_LEN - 12 - 2*RFC_MAX_NICKNAME;
                     int msg_len = (int)strlen(params[1]);
                     int num_patches = msg_len / max_len;
-
+                    
                     int i;
                     char buffer[max_len+1];
                     reply(server_info, sendTo,
@@ -943,7 +876,7 @@ void cmdPmsg(CMD_ARGS)
                             int max_len = RFC_MAX_MSG_LEN - 12 - 2*RFC_MAX_NICKNAME;
                             int msg_len = (int)strlen(params[1]);
                             int num_patches = msg_len / max_len;
-
+                            
                             int i;
                             char buffer[max_len+1];
                             reply(server_info, other,
@@ -1032,9 +965,8 @@ void cmdWho(CMD_ARGS)
         {
             item_end = strchr(item_start, ',');
             if (item_end)
-                *item_end = '\0';
+            *item_end = '\0';
             GET_SAFE_NAME(safe_query, item_start);
-
             channel_t* ch_match = find_channel_by_name(server_info, safe_query);
             // As per RFC annotation:
             // Your server should match <name> against channel name only
@@ -1059,17 +991,14 @@ void cmdWho(CMD_ARGS)
                 iter_clean(it_cli);
             }
             // CHOICE: if |safe_query| doesn't match any channel, fall through
-
             reply(server_info, cli,
                   ":%s %d %s %s :End of /WHO list\r\n",
                   server_info->hostname,
                   RPL_ENDOFWHO,
                   cli->nick,
                   safe_query);
-
             if (item_end)
-                item_start = item_end + 1;
-
+            item_start = item_end + 1;
         } while (item_end);
     }
 }
