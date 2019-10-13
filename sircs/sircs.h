@@ -36,6 +36,7 @@ struct __client_struct {
     int sock;
     struct sockaddr_in cliaddr;
     size_t inbuf_size;
+    int keep_throwing;
     int registered;
     int zombie;
     char hostname[MAX_HOSTNAME];

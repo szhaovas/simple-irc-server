@@ -29,9 +29,9 @@ extern unsigned int debug;
 #define DEBUG_ERRS      0x01	// DBTEXT:  Verbose error reporting
 #define DEBUG_INIT      0x02	// DBTEXT:  Debug initialization
 #define DEBUG_SOCKETS   0x04  // DBTEXT:  Debug socket operations
-#define DEBUG_INPUT     0x08  // DBTEXT:  Debug client input
-#define DEBUG_CLIENTS   0x10  // DBTEXT:  Debug client arrival/depart
-#define DEBUG_COMMANDS  0x20  // DBTEXT:  Debug client commands
+#define DEBUG_SPLIT     0x08  // DBTEXT:  Debug message splitting
+#define DEBUG_INPUT     0x10  // DBTEXT:  Debug client input
+#define DEBUG_CLIENTS   0x20  // DBTEXT:  Debug client arrival/depart
 #define DEBUG_CHANNELS  0x40  // DBTEXT:  Debug channel operations
 #define DEBUG_REPLIES   0x80  // DBTEXT:  Debug server replies
 
