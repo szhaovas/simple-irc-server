@@ -97,7 +97,9 @@ void vreply(server_info_t* server_info,  client_t* cli, Node* cli_node,
         va_end(args_copy);
         
         // Write to client socket and check errors
-        if (vdprintf(cli->sock, format, args) < 0)
+        size_t num_bytes = vdprintf(cli->sock, format, args);
+        assert(num_bytes <= RFC_MAX_MSG_LEN);
+        if (num_bytes < 0)
         {
             // Mark client as zombie, and add to the list of zombies
             cli->zombie = TRUE;
@@ -196,7 +198,7 @@ void handle_line(char* line, server_info_t* server_info, client_t* cli, Node* cl
         params[nparams++] = trailing;
     }
     DEBUG_PRINTF(DEBUG_INPUT, "Prefix:  %s\nCommand: %s\nParams (%d):\n",
-            prefix ? prefix : "<none>", command, nparams);
+                 prefix ? prefix : "<none>", command, nparams);
     int i;
     for (i = 0; i < nparams; i++){
         DEBUG_PRINTF(DEBUG_INPUT, "   %s\n", params[i]);
@@ -544,7 +546,7 @@ void cmdNick(CMD_ARGS)
         char old_nick[RFC_MAX_NICKNAME+1];
         old_nick[RFC_MAX_NICKNAME] = '\0';
         if (*cli->nick)
-            strcpy(old_nick, cli->nick);
+        strcpy(old_nick, cli->nick);
         
         // Set client's nickname
         strcpy(cli->nick, nick); // CHOICE: new nick same as old nick => No effect
@@ -786,7 +788,7 @@ void cmdList(CMD_ARGS)
           server_info->hostname,
           RPL_LISTSTART,
           cli->nick);
-
+    
     ITER_LOOP(it, server_info->channels)
     {
         channel_t* ch = (channel_t *) iter_get_item(it);
@@ -813,23 +815,26 @@ void cmdList(CMD_ARGS)
  */
 void cmdPmsg(CMD_ARGS)
 {
-    // <target>{,<target>} <text to be sent>
-    // ERR_NORECIPIENT
-    // ERR_NOTEXTTOSEND
-    // ERR_NOSUCHNICK (when cannot find nick/channame?)
-    
-    // Since there is no way to tell between target and text_to_send,
-    // if nparams == 0 then reply ERR_NORECIPIENT
-    // if nparams == 1 then reply ERR_NOTEXTTOSEND
-    // FIXME: Note this in the design doc
-    if (!nparams) {
+    /* CHOICE:
+     * When there aren't enough params, there is no way to tell between
+     * a target name and text_to_send.
+     * Thus, we assume that the first param must be the target name.
+     *   If nparams == 0, then reply ERR_NORECIPIENT.
+     *   If nparams == 1, then reply ERR_NOTEXTTOSEND.
+     *
+     * FIXME: Note this in the design doc
+     */
+    if (nparams == 0)
+    {
         reply(server_info, cli, cli_node,
               ":%s %d %s :No recipient given (PRIVMSG)\r\n",
               server_info->hostname,
               ERR_NORECIPIENT,
               cli->nick);
         return;
-    } else if (nparams == 1) {
+    }
+    else if (nparams == 1)
+    {
         reply(server_info, cli, cli_node,
               ":%s %d %s :No text to send\r\n",
               server_info->hostname,
@@ -837,112 +842,75 @@ void cmdPmsg(CMD_ARGS)
               cli->nick);
         return;
     }
-    // Parse targets by ","
-    char *str = strdup(params[0]);
-    char *target = strtok(str, ","); // FIXME: use strsep
-    while(target) {
-        int is_valid_target = 0;
-        // If target is the sending client itself, ignore without replying error
-        if (!strcmp(target, cli->nick)) {
-            //go to next target
-            target = strtok(NULL, ","); // FIXME: use strsep
+    // Parse target list, delimited by ","
+    char *target_list, *to_free;
+    to_free = target_list = strdup(params[0]);
+    char *target = strtok(target_list, ",");
+    while (target)
+    {
+        if (!strcmp(target, cli->nick))
+        {   // Do nothing if the target is the sending client
+            target = strtok(NULL, ",");
             continue;
         }
         
-        // Is target a client?
-        if (is_nickname_valid(target)) {
-            ITER_LOOP(c, server_info->clients)
+        int target_found = FALSE;
+        
+        // Is the target a client?
+        ITER_LOOP(it, server_info->clients)
+        {
+            client_t* other = (client_t *) iter_get_item(it);
+            Node* other_node = iter_get_node(it);
+            if (!strcmp(target, other->nick)) // Target found
             {
-                client_t* sendTo = (client_t *) iter_get_item(c);
-                Node* sendTo_node = iter_get_node(c);
-                // If target is a client, send to the client
-                if (!strcmp(target, sendTo->nick)) {
-                    // CHOICE: allow long (> 512 B) messages, send in smaller patches
-                    int max_len = RFC_MAX_MSG_LEN - 12 - 2*RFC_MAX_NICKNAME;
-                    int msg_len = (int)strlen(params[1]);
-                    int num_patches = msg_len / max_len;
-                    
-                    int i;
-                    char buffer[max_len+1];
-                    reply(server_info, sendTo, sendTo_node,
-                          ":%s PRIVMSG %s :",
+                target_found = TRUE;
+                reply(server_info, other, other_node,
+                      ":%s PRIVMSG %s :%s\r\n",
+                      cli->nick,
+                      target,
+                      params[1]);
+                break;
+            }
+        }
+        ITER_END(it);
+        
+        // Is the target is a channel?
+        channel_t* ch_found = find_channel_by_name(server_info, target);
+        if (ch_found)
+        {
+            target_found = TRUE;
+            ITER_LOOP(it, ch_found->members)
+            {
+                client_t* other = (client_t *) iter_get_item(it);
+                Node* other_node = iter_get_node(it);
+                if (other != cli)
+                {
+                    reply(server_info, other, other_node,
+                          ":%s PRIVMSG %s :%s\r\n",
                           cli->nick,
-                          target);
-                    for (i = 0; i < num_patches; i++) {
-                        strncpy(buffer, params[1], max_len);
-                        buffer[max_len] = '\0';
-                        params[1] += max_len;
-                        reply(server_info, sendTo, sendTo_node,
-                              "%s",
-                              buffer);
-                    }
-                    reply(server_info, sendTo, sendTo_node,
-                          "%s\r\n",
+                          target,
                           params[1]);
-                    is_valid_target = 1;
-                    break;
                 }
             }
-            ITER_END(c);
+            ITER_END(it);
         }
-        // Check if the target is a channel
-        else if (is_channel_valid(target)) { // FIXME: no need to check name validity
-            // FIXME: use find_channel_by_name
-            ITER_LOOP(ch, server_info->channels)
-            {
-                channel_t* sendTo = (channel_t *) iter_get_item(ch);
-                // If target is a channel, forward the msg to all members but the sender
-                if (!strcmp(target, sendTo->name)) {
-                    ITER_LOOP(m, sendTo->members)
-                    {
-                        client_t* other = (client_t *) iter_get_item(m);
-                        Node* other_node = iter_get_node(m);
-                        if (cli != other)
-                        {
-                            // CHOICE: Allow long (> 512 B) messages, send in smaller patches
-                            int max_len = RFC_MAX_MSG_LEN - 12 - 2*RFC_MAX_NICKNAME;
-                            int msg_len = (int)strlen(params[1]);
-                            int num_patches = msg_len / max_len;
-                            
-                            int i;
-                            char buffer[max_len+1];
-                            reply(server_info, other, other_node,
-                                  ":%s PRIVMSG %s :",
-                                  cli->nick,
-                                  target);
-                            for (i = 0; i < num_patches; i++) {
-                                strncpy(buffer, params[1], max_len);
-                                buffer[max_len] = '\0';
-                                params[1] += max_len;
-                                reply(server_info, other, other_node,
-                                      "%s",
-                                      buffer);
-                            }
-                            reply(server_info, other, other_node,
-                                  "%s\r\n",
-                                  params[1]);
-                        }
-                    }
-                    ITER_END(m);
-                    is_valid_target = 1;
-                    break;
-                }
-            }
-            ITER_END(ch);
-        }
-        // Target is neither a client nor a channel, return ERR_NOSUCHNICK
-        // FIXME: print two nicks? ---------------------------------------------------------------------------------------------------------------------------------------
-        if (!is_valid_target) {
+        
+        // Target name matches neither client nor a channel
+        // ERROR - No such nick
+        if (!target_found)
+        {
             reply(server_info, cli, cli_node,
                   ":%s %d %s %s :No such nick/channel\r\n",
                   server_info->hostname,
                   ERR_NOSUCHNICK,
-                  target,
+                  cli->nick,
                   target);
         }
-        // Go to next target
-        target = strtok(NULL, ","); // FIXME: use strsep
-    }
+        // Go to next target name
+        target = strtok(NULL, ",");
+        
+    } /* while(target) */
+    free(to_free);
 }
 
 
