@@ -162,6 +162,8 @@ int main(int argc, char *argv[] ){
             ITER_LOOP(it, server_info.clients)
             {
                 client_t* cli = (client_t *) iter_get_item(it);
+                Node* cli_node = iter_get_node(it);
+                if (FD_ISSET(cli->sock, &fds))
                 {
                     DEBUG_PRINTF(DEBUG_CLIENTS, "Active fd=%i\n", cli->sock);
                     __rc = handle_data(&server_info, cli, cli_node);
@@ -169,7 +171,7 @@ int main(int argc, char *argv[] ){
                     if (__rc < 0)
                     {
                         cli->registered = 1; // Ugly but quick fix
-                        handleLine("QUIT", &server_info, cli);
+                        handle_line("QUIT", &server_info, cli, cli_node);
                     }
                 }
             } /* Iterator loop */
@@ -304,7 +306,7 @@ int handle_new_connection(int listenfd, LinkedList* clients)
 
 /* Handle new input data from the client.
  */
-int handle_data(server_info_t* server_info, client_t* cli)
+int handle_data(server_info_t* server_info, client_t* cli, Node* cli_node)
 {
     // Make sure there's still space to read anything
     assert(cli->inbuf_size < MAX_MSG_LEN);
@@ -356,7 +358,7 @@ int handle_data(server_info_t* server_info, client_t* cli)
 //        print_hex(DEBUG_INPUT, msg, MAX_MSG_LEN);
 //        DEBUG_PRINTF(DEBUG_INPUT, "\n");
 
-        handleLine(msg, server_info, cli);
+        handle_line(msg, server_info, cli, cli_node);
         
         msg = end + 1;
     }

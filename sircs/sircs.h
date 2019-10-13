@@ -55,7 +55,7 @@ int set_non_blocking(int fd);
 
 int handle_new_connection(int listenfd, LinkedList* clients);
 
-int handle_data(server_info_t* server_info, client_t* client);
+int handle_data(server_info_t* server_info, client_t* cli, Node* cli_node);
 
 void exit_on_error(long __rc, const char* str);
 
