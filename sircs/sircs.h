@@ -29,6 +29,7 @@ typedef struct {
 
 struct __channel_struct {
     char name[MAX_CHANNAME];
+    Node* node_channels;
     LinkedList* members;
 };
 
@@ -39,13 +40,15 @@ struct __client_struct {
     int keep_throwing;
     int registered;
     int zombie;
+    channel_t* channel;
+    Node* node_clients;
+    Node* node_members;
     char hostname[MAX_HOSTNAME];
     char servername[MAX_SERVERNAME]; // FIXME: not used, so can be removed
     char user[MAX_USERNAME];
     char nick[MAX_USERNAME];
     char realname[MAX_REALNAME];
     char inbuf[MAX_MSG_LEN+1];
-    channel_t* channel;
 };
 
 

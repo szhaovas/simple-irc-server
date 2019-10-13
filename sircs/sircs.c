@@ -296,7 +296,7 @@ int handle_new_connection(int listenfd, LinkedList* clients)
             cli->hostname,
             cli->sock);
     
-    add_item(clients, cli);
+    cli->node_clients = add_item(clients, cli); // Backward pointer to server's client list
     return 0;
 }
 

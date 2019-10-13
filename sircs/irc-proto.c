@@ -402,7 +402,7 @@ void remove_channel_if_empty(server_info_t* server_info, channel_t* ch)
 {
     if (ch->members->size == 0)
     {
-        find_and_drop_item(server_info->channels, ch);
+        drop_node(server_info->channels, ch->node_channels);
         free(ch->members);
         free(ch);
     }
@@ -417,7 +417,7 @@ void remove_client_from_channel(server_info_t* server_info, client_t* cli)
     if (cli->channel)
     {
         // Remove client from the channel member list
-        find_and_drop_item(cli->channel->members, cli);
+        drop_node(cli->channel->members, cli->node_members);
         // Remove channel if it becomes empty
         remove_channel_if_empty(server_info, cli->channel);
     }
@@ -617,7 +617,7 @@ void cmdQuit(CMD_ARGS)
     if (!cli->zombie)
     {
         cli->zombie = TRUE;
-        add_item(server_info->zombies, cli);
+        add_item(server_info->zombies, cli); // Backward pointer to server's zombie list
     }
     // Else, the command was faked by the server,
     // in which case the client has already been duly marked as a zombie.
@@ -631,7 +631,7 @@ void cmdQuit(CMD_ARGS)
                  cli->hostname);
     cli->channel = NULL;
     // Remove client from the server's client list
-    find_and_drop_item(server_info->clients, cli);
+    drop_node(server_info->clients, cli->node_clients);
     // Close the connection
     close(cli->sock);
     
@@ -686,11 +686,12 @@ void cmdJoin(CMD_ARGS)
             init_list(members);
             new_ch->members = members;
             strcpy(new_ch->name, channel_to_join);
-            add_item(server_info->channels, new_ch);
+            // Backward pointer to server's channel list
+            new_ch->node_channels = add_item(server_info->channels, new_ch);
             ch_found = new_ch;
         }
         // Channel to join (ch_found) exists at this point
-        add_item(ch_found->members, cli); // Add client to the member list
+        cli->node_members = add_item(ch_found->members, cli); // Backward pointer to channel's member list
         cli->channel = ch_found;
         
         // ECHO - JOIN to all members, including the newly joined client
