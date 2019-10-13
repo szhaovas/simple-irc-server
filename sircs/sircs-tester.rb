@@ -96,6 +96,12 @@ class IRC
         puts "--> #{s}"
         @irc.send "#{s}\n", 0
     end
+    
+    def send_raw(s)
+        # Send a message to the irc server and print it to the screen
+        puts "--> #{s}"
+        @irc.send "#{s}", 0
+    end
 
     def connect()
         # Connect to the IRC server
@@ -354,18 +360,45 @@ def eval_test(n, passed_exp, failed_exp, passed, points = 1)
     exit(0) if !passed
 end
 
-irc = IRC.new($SERVER, $PORT, '', '')
-irc.connect()
-begin
+
+
+begin           
+
+########### TEST MESSAGE SPLITTING ##########################
+## Please enable DEBUG_SPLIT and examine server debug messages
+
+    tn = test_name("Split")
+    irc = IRC.new($SERVER, $PORT, '', '')
+    irc.connect()
+
+    # Overflow an empty buffer
+    irc.send_raw("0" * 512) # should throw away this and keep throwing
+    # Empty buffer, keep throwing + a good msg
+    irc.send_raw("1\nnick a\n") # should extract "nick a"
+
+    # Overflow an empty buffer. Should throw away everything.
+    irc.send_raw("0" * 2049 + "0\n")
+
+    # Empty buffer, multiple incomplete good msg "nick a" and "user a a a :"
+    irc.send_raw("ni")
+    irc.send_raw("ck")
+    irc.send_raw(" a\nuser a a a:")
+    irc.send_raw("\n")
+
+     # Fill the buffer with trash
+    irc.send_raw("0"*511)
+    irc.send_raw("nick a\n") # This is not a good msg because it is part of a illegal one
+    irc.disconnect()
+    irc.connect()
 
 ########## TEST NICK COMMAND ##########################
 # The RFC states that there is no response to a NICK command,
 # so we test for this.
-    tn = test_name("NICK")
-    irc.send_nick("rui")
-    puts "<-- Testing for silence (1 seconds)..."
+   tn = test_name("NICK")
+   irc.send_nick("rui")
+   puts "<-- Testing for silence (1 seconds)..."
 
-    eval_test(tn, nil, nil, irc.test_silence(1))
+   eval_test(tn, nil, nil, irc.test_silence(1))
 
 
 ############## TEST USER COMMAND ##################
@@ -373,70 +406,70 @@ begin
 # so we disconnect first (otherwise the full registration
 # of NICK+USER would give us an MOTD), then check
 # for silence
-    tn = test_name("USER")
+   tn = test_name("USER")
 
-    puts "Disconnecting and reconnecting to IRC server\n"
-    irc.disconnect()
-    irc.connect()
+   puts "Disconnecting and reconnecting to IRC server\n"
+   irc.disconnect()
+   irc.connect()
 
-    irc.send_user("myUsername myHostname myServername :My real name")
-    puts "<-- Testing for silence (1 seconds)..."
+   irc.send_user("myUsername myHostname myServername :My real name")
+   puts "<-- Testing for silence (1 seconds)..."
 
-    eval_test(tn, nil, "should not return a response on its own",
-	      irc.test_silence(1))
+   eval_test(tn, nil, "should not return a response on its own",
+         irc.test_silence(1))
 
 ############# TEST FOR REGISTRATION ##############
 # A NICK+USER is a registration that triggers the
 # MOTD.  This test sends a nickname to complete the registration,
 # and then checks for the MOTD.
-    tn = test_name("Registration")
-    irc.send_nick("rui")
-    puts "<-- Listening for MOTD...";
+   tn = test_name("Registration")
+   irc.send_nick("rui")
+   puts "<-- Listening for MOTD...";
 
-    eval_test(tn, nil, nil, irc.get_motd())
+   eval_test(tn, nil, nil, irc.get_motd())
 
 ############## TEST JOINING ####################
 # We join a channel and make sure the client gets
 # his join echoed back (which comes first), then
 # gets a names list.
-    tn = test_name("JOIN")
-    eval_test(tn, nil, nil,
-	      irc.join_channel("rui", "#linux"))
+   tn = test_name("JOIN")
+   eval_test(tn, nil, nil,
+         irc.join_channel("rui", "#linux"))
 
 ############## WHO ####################
 # Who should list everyone in a channel
 # or everyone on the server.  We are only
 # checking WHO <channel>.
 # The response should follow the RFC.
-    tn = test_name("WHO")
-    eval_test(tn, nil, nil, irc.who("#linux"))
+   tn = test_name("WHO")
+   eval_test(tn, nil, nil, irc.who("#linux"))
 
 ############## LIST ####################
 # LIST is used to check all the channels on a server.
 # The response should include #linux and its format should follow the RFC.
-    # tn = test_name("LIST")
-    # eval_test(tn, nil, nil, irc.list())
+   # tn = test_name("LIST")
+   # eval_test(tn, nil, nil, irc.list())
 
 ############## PRIVMSG ###################
 # Connect a second client that sends a message to the original client.
 # Test that the original client receives the message.
-    tn = test_name("PRIVMSG")
-    irc2 = IRC.new($SERVER, $PORT, '', '')
-    irc2.connect()
-    irc2.send_nick("rui2")
-    irc2.send_user("myUsername2 myHostname2 myServername2 :My real name 2")
-    msg = "to IRC or not to IRC, that is the question"
-    irc2.send_privmsg("rui", msg)
-    eval_test(tn, nil, nil, irc.checkmsg("rui2", "rui", msg))
+   tn = test_name("PRIVMSG")
+   irc2 = IRC.new($SERVER, $PORT, '', '')
+   irc2.connect()
+   irc2.send_nick("rui2")
+   irc2.send_user("myUsername2 myHostname2 myServername2 :My real name 2")
+   msg = "to IRC or not to IRC, that is the question"
+   irc2.send_privmsg("rui", msg)
+   eval_test(tn, nil, nil, irc.checkmsg("rui2", "rui", msg))
 
 ############## ECHO JOIN ###################
 # When another client joins a channel, all clients
 # in that channel should get :newuser JOIN #channel
-    tn = test_name("ECHO ON JOIN")
-    # "raw" means no testing of responses done
-    irc2.raw_join_channel("rui2", "#linux")
-    irc2.ignore_reply()
-    eval_test(tn, nil, nil, irc.check_echojoin("rui2", "#linux"))
+   tn = test_name("ECHO ON JOIN")
+   # "raw" means no testing of responses done
+   irc2.raw_join_channel("rui2", "#linux")
+   irc2.ignore_reply()
+   eval_test(tn, nil, nil, irc.check_echojoin("rui2", "#linux"))
 
 
 ############## MULTI-TARGET PRIVMSG ###################
@@ -444,23 +477,23 @@ begin
 # multiple targets, with ',' as a delimiter.
 # We use client2 to send a message to rui and #linux.
 # Both should receive the message.
-    tn = test_name("MULTI-TARGET PRIVMSG")
-    msg = "success is 1 pcent inspiration and 99 pcent perspiration"
-    irc2.send_privmsg("rui,#linux", msg)
-    eval_test(tn, nil, nil, irc.check2msg("rui2", "rui", "#linux", msg))
-    irc2.ignore_reply()
+   tn = test_name("MULTI-TARGET PRIVMSG")
+   msg = "success is 1 pcent inspiration and 99 pcent perspiration"
+   irc2.send_privmsg("rui,#linux", msg)
+   eval_test(tn, nil, nil, irc.check2msg("rui2", "rui", "#linux", msg))
+   irc2.ignore_reply()
 
 ############## PART ###################
 # When a client parts a channel, a QUIT message
 # is sent to all clients in the channel, including
 # the client that is parting.
-    tn = test_name("PART")
-    eval_test("PART echo to self", nil, nil,
-	      irc2.part_channel("rui2", "#linux"),
-	      0) # note that this is a zero-point test!
+   tn = test_name("PART")
+   eval_test("PART echo to self", nil, nil,
+         irc2.part_channel("rui2", "#linux"),
+         0) # note that this is a zero-point test!
 
-    eval_test("PART echo to other clients", nil, nil,
-	      irc.check_part("rui2", "#linux"))
+   eval_test("PART echo to other clients", nil, nil,
+         irc.check_part("rui2", "#linux"))
 
 ## Your tests go here!
 
@@ -468,32 +501,32 @@ begin
 # <nick> ::= <letter> { <letter> | <number> | <special> }
 # <nick> cannot consist of more than 9 characters
 
-    tn = test_name("SPEC_CHAR_NICKNAME")
-    irc3 = IRC.new($SERVER, $PORT, '', '')
-    irc3.connect()
-    eval_test(tn, nil, nil, irc3.invalid_nick("#Datroll"))
+   tn = test_name("SPEC_CHAR_NICKNAME")
+   irc3 = IRC.new($SERVER, $PORT, '', '')
+   irc3.connect()
+   eval_test(tn, nil, nil, irc3.invalid_nick("#Datroll"))
 
-    tn = test_name("LONG_NICKNAME")
-    eval_test(tn, nil, nil, irc3.invalid_nick("lololololololololololololololo"))
-    irc3.disconnect()
+   tn = test_name("LONG_NICKNAME")
+   eval_test(tn, nil, nil, irc3.invalid_nick("lololololololololololololololo"))
+   irc3.disconnect()
 
 ############## INVALID_CHANNAME ###################
 # <channel> ::= ('#' | '&') <chstring>
 # <channel> cannot consist of more than 9 characters
 
-    tn = test_name("NO_LEADING_#&")
-    eval_test(tn, nil, nil, irc.invalid_chan("channel"))
+   tn = test_name("NO_LEADING_#&")
+   eval_test(tn, nil, nil, irc.invalid_chan("channel"))
 
-    tn = test_name("LONG_CHANNAME")
-    eval_test(tn, nil, nil, irc.invalid_chan("#lololololololololololololololo"))
+   tn = test_name("LONG_CHANNAME")
+   eval_test(tn, nil, nil, irc.invalid_chan("#lololololololololololololololo"))
 
 ############## LONG_PRIVMSG ###################
 # When sending a very long PRIVMSG, the message should
 # be split and sent in multiple patches
-    tn = test_name("LONG_PRIVMSG")
-    msg = str = "a" * 1000
-    irc2.send_privmsg("rui", msg)
-    eval_test(tn, nil, nil, irc.checkmsg("rui2", "rui", msg))
+   tn = test_name("LONG_PRIVMSG")
+   msg = str = "a" * 1000
+   irc2.send_privmsg("rui", msg)
+   eval_test(tn, nil, nil, irc.checkmsg("rui2", "rui", msg))
 
 ############## LONG_PRIVMSG ###################
 
