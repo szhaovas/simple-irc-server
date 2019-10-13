@@ -42,18 +42,25 @@ The channel structure has type `channel_t`, which includes the name of the chann
 
 ## Implementation choices concerning the RFC
 
-We have placed the word `CHOICE` next to the code for which the RFC does not specify the standard behavior. The following lists summarize the implementation choices we have made:
+We have placed the word `CHOICE` next to the code for which the RFC does not specify the standard behavior. The following list summarizes the implementation choices we have made:
 
-1. If a server reply must quote a string sent by the client, e.g., an invalid command or nickname, then we truncate a long string to keep server message from exceeding the message size limit. If the string is empty, we replace it with the character `*`.
+1. Messages strictly longer than 512 bytes will be discarded in their entireties. (Initially, we only threw away the first 512 bytes, but we realized that the remaining portion may itself constitute a "valid" command, which we would not want to process.)
 
-2. If the client issues multiple USER commands before being registered (i.e. issuing a valid NICK command), then existing client information is silently overwritten by each USER command.
+2. If a server reply must quote a string sent by the client, e.g., an invalid command or nickname, then we truncate a long string to keep server message from exceeding the message size limit. If the string is empty, we replace it with the character `*`.
 
-3. For JOIN and PART, if the client has specified a target list, we take only the first item and ignore the rest.
+3. If the user specifies _too many_ parameters for a command, we only consume the necessary parameters, and ignore the redundant ones.
 
-<!-- 4. If a client parts a channel (both explicitly it was a PART message or implicitly if the client joins another channel), we echo PART instead of QUIT to channel -->
+7. Command NICK: If a client attempts to request the same nickname again, no reply is generated.
 
-4. If a client attempts to set the same nickname, no reply is generated.
+9. Command NICK: If a client `A` attempts to request a nickname belonging to another non-registered client `B`, then `A` will still get a nickname-already-in-use error.
 
+8. Command USER: If the client issues multiple USER commands before being registered (i.e. issuing a valid NICK command), then existing client information is silently overwritten by each USER command.
+
+10. Command JOIN & PART: If a client parts a channel (both explicitly if the command was PART, or implicitly if the client switches to another channel), we always echo QUIT to the channel members, including the client him/herself (even though PART would be a more logical choice here).
+
+11. Command PRIVMSG: When there aren't enough params, there is no way to tell between a target name and the text to send. Thus, we assume that the first param is the target name, i.e.,
+    - If no parameter is specified, then we reply ERR_NORECIPIENT.
+    - If only one parameter is specified, then we reply ERR_NOTEXTTOSEND.
 
 ## Known Issues
-1. Depending on the timing of disconnection, the function `vreply()` may segfault.
+1. Depending on the (rare) timing of disconnection, the program may segfault in function `vreply()`.
