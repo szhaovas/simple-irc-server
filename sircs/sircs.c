@@ -308,13 +308,17 @@ int handle_new_connection(int listenfd, LinkedList* clients)
  */
 int handle_data(server_info_t* server_info, client_t* cli, Node* cli_node)
 {
-    // Make sure there's still space to read anything
-    assert(cli->inbuf_size < MAX_MSG_LEN);
-    // Compute remaning space
-    int buf_remaining = MAX_MSG_LEN - cli->inbuf_size;
+    // Precondition:
+    // client's input buffer must contain less than RFC_MAX_MSG_LEN bytes
+    assert(cli->inbuf_size < RFC_MAX_MSG_LEN);
+    
     // Compute buffer offset
-    char *buf = cli->inbuf + cli->inbuf_size;
-    int bytes_read = (int) read(cli->sock, buf, buf_remaining);
+    char *buf_contd = cli->inbuf + cli->inbuf_size;
+    long bytes_read = read(cli->sock,
+                           buf_contd,
+                           // Ensures message size <= RFC_MAX_MSG_LEN
+                           RFC_MAX_MSG_LEN - cli->inbuf_size);
+    
     if (bytes_read < 0)
     {
         // Nothing to read due to non-blocking fd
@@ -333,18 +337,18 @@ int handle_data(server_info_t* server_info, client_t* cli, Node* cli_node)
         DEBUG_PRINTF(DEBUG_INPUT, "EOF\n");
         return -1;
     }
-    // Print received contents
-    DEBUG_PRINTF(DEBUG_INPUT, "<< Got:   %s\n", buf);
-    DEBUG_PRINTF(DEBUG_INPUT, "<< Bytes: ");
-    print_hex(DEBUG_INPUT, buf, MAX_MSG_LEN+1);
-    DEBUG_PRINTF(DEBUG_INPUT, "\n");
     
-    char *msg = cli->inbuf; // start of a (potential) msg
+    // Else, we've read some data
+    DEBUG_PRINTF(DEBUG_INPUT, "<< Got:\n%s\n", buf_contd);
+    
+    char *msg = cli->inbuf; // Start of the msg
     char *cr, *lf, *end;
-    while (msg < cli->inbuf + MAX_MSG_LEN) {
+    while (msg < cli->inbuf + RFC_MAX_MSG_LEN)
+    {
+        // Look for the next '\r' or '\n'
         cr = strchr(msg, '\r');
         lf = strchr(msg, '\n');
-        if (!cr && !lf)
+        if (!cr && !lf) // All complete messages have been handled
             break;
         if (!cr)
             end = lf;
@@ -355,39 +359,39 @@ int handle_data(server_info_t* server_info, client_t* cli, Node* cli_node)
         *end = '\0';
         
         DEBUG_PRINTF(DEBUG_INPUT, "Msg: %s\n", msg);
-//        print_hex(DEBUG_INPUT, msg, MAX_MSG_LEN);
-//        DEBUG_PRINTF(DEBUG_INPUT, "\n");
 
         handle_line(msg, server_info, cli, cli_node);
         
         msg = end + 1;
     }
-    size_t last_msg_len = strlen(msg); //
+    size_t remaining_msg_len = strlen(msg);
     // Nothing else to read
     // Also throw away a segment if it is already too long
-    if ( last_msg_len == 0 || last_msg_len >= RFC_MAX_MSG_LEN)
+    if ( remaining_msg_len == 0 || remaining_msg_len >= RFC_MAX_MSG_LEN)
     {
-        memset(&(cli->inbuf), '\0', MAX_MSG_LEN);
+        memset(&(cli->inbuf), '\0', sizeof(cli->inbuf));
         cli->inbuf_size = 0;
     }
-    // Initial segment of an incomplete msg (assuming the rest will be delivered next time)
+    // What remains in the buffer is the initial segment of an incomplete msg,
+    // assuming the rest will be delivered next time.
     // Move this segment to the beginning of the buffer
     else
     {
         // Temporary buffer
+        // Techically we only need RFC_MAX_MSG_LEN bytes, since remaining_msg_len < RFC_MAX_MSG_LEN
         char tmp[RFC_MAX_MSG_LEN+1];
         tmp[RFC_MAX_MSG_LEN] = '\0';
-        // Copy msg -> tmp, with a maximum of RFC_MAX_MSG_LEN (512) characters
-        strncpy(tmp, msg, RFC_MAX_MSG_LEN);
+        // Copy msg -> tmp
+        strcpy(tmp, msg);
         // Clear input buffer
-        memset(&(cli->inbuf), '\0', MAX_MSG_LEN);
+        memset(&(cli->inbuf), '\0', sizeof(cli->inbuf));
         // Copy tmp -> msg
         strcpy(cli->inbuf, tmp);
-        cli->inbuf_size = (unsigned) strlen(cli->inbuf);
+        cli->inbuf_size = remaining_msg_len;
         
-        DEBUG_PRINTF(DEBUG_INPUT, "Incomplete msg: %s\n", cli->inbuf);
-        print_hex(DEBUG_INPUT, cli->inbuf, MAX_MSG_LEN);
-        DEBUG_PRINTF(DEBUG_INPUT, "\n");
+        DEBUG_PRINTF(DEBUG_INPUT, "Incomplete msg:\n%s\n", cli->inbuf);
+//        print_hex(DEBUG_INPUT, cli->inbuf, MAX_MSG_LEN);
+//        DEBUG_PRINTF(DEBUG_INPUT, "\n");
     }
     return 0;
 }

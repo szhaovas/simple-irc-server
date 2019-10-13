@@ -35,7 +35,7 @@ struct __channel_struct {
 struct __client_struct {
     int sock;
     struct sockaddr_in cliaddr;
-    unsigned inbuf_size;
+    size_t inbuf_size;
     int registered;
     int zombie;
     char hostname[MAX_HOSTNAME];
