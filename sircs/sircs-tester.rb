@@ -96,7 +96,7 @@ class IRC
         puts "--> #{s}"
         @irc.send "#{s}\n", 0
     end
-    
+
     def send_raw(s)
         # Send a message to the irc server and print it to the screen
         puts "--> #{s}"
@@ -306,6 +306,62 @@ class IRC
       end
   end
 
+  def used_nick(s)
+      send("NICK #{s}")
+
+      data = recv_data_from_server(1);
+
+      if(data.size == 1 and data[0] =~ /^:[^ ]+ *433 *rui *#{s} *:Nickname is already in use */)
+          return true
+      else
+          puts data
+          puts "NICK " +s+ " should return ERR_NICKNAMEINUSE and nothing more"
+          return false
+      end
+  end
+
+  def no_nick()
+      send("NICK")
+
+      data = recv_data_from_server(1);
+
+      if(data.size == 1 and data[0] =~ /^:[^ ]+ *431 *rui *:No nickname given */)
+          return true
+      else
+          puts data
+          puts "NICK <blank> should return ERR_NONICKNAMEGIVEN and nothing more"
+          return false
+      end
+  end
+
+  def less_params(cmd)
+      send("#{cmd}")
+
+      data = recv_data_from_server(1);
+
+      if(data.size == 1 and data[0] =~ /^:[^ ]+ *461 *rui #{cmd} *:Not enough parameters */)
+          return true
+      else
+          puts data
+          puts "#{cmd} should return ERR_NEEDMOREPARAMS and nothing more"
+          return false
+      end
+  end
+
+  def reset_user()
+      send("USER a a a a")
+
+      data = recv_data_from_server(1);
+
+      if(data.size == 1 and data[0] =~ /^:[^ ]+ *462 *rui *:You may not reregister */)
+          return true
+      else
+          puts data
+          puts "Resetting user info after registration should return ERR_ALREADYREGISTRED and nothing more"
+          return false
+      end
+  end
+
   def invalid_chan(s)
       send("JOIN #{s}")
 
@@ -317,7 +373,7 @@ class IRC
           return true
       else
           puts data
-          puts "JOIN " +s+ " should return ERR_NOSUCHCHANNEL"
+          puts "JOIN " +s+ " should return ERR_NOSUCHCHANNEL and nothing more"
           return false
       end
   end
@@ -362,7 +418,7 @@ end
 
 
 
-begin           
+begin
 
 ########### TEST MESSAGE SPLITTING ##########################
 ## Please enable DEBUG_SPLIT and examine server debug messages
@@ -447,8 +503,8 @@ begin
 ############## LIST ####################
 # LIST is used to check all the channels on a server.
 # The response should include #linux and its format should follow the RFC.
-   # tn = test_name("LIST")
-   # eval_test(tn, nil, nil, irc.list())
+    tn = test_name("LIST")
+    eval_test(tn, nil, nil, irc.list())
 
 ############## PRIVMSG ###################
 # Connect a second client that sends a message to the original client.
@@ -497,7 +553,8 @@ begin
 
 ## Your tests go here!
 
-############## INVALID_NICKNAME ###################
+############## NICKNAME_ERRORS ###################
+# INVALID_NICKNAME
 # <nick> ::= <letter> { <letter> | <number> | <special> }
 # <nick> cannot consist of more than 9 characters
 
@@ -510,7 +567,33 @@ begin
    eval_test(tn, nil, nil, irc3.invalid_nick("lololololololololololololololo"))
    irc3.disconnect()
 
-############## INVALID_CHANNAME ###################
+# USED_NICKNAME
+# NICK <used_nickname> should return ERR_NICKNAMEINUSE
+
+    tn = test_name("USED_NICKNAME")
+    eval_test(tn, nil, nil, irc.used_nick("rui2"))
+
+# NO_NICK_NAME_GIVEN
+# NICK <blank> should return ERR_NONICKNAMEGIVEN
+
+    tn = test_name("NO_NICK_NAME_GIVEN")
+    eval_test(tn, nil, nil, irc.no_nick())
+
+############## USER_ERRORS ###################
+# NOT_ENOUGH_PARAMETERS
+# USER <less than 4 params> should return ERR_NEEDMOREPARAMS
+
+    tn = test_name("NOT_ENOUGH_PARAMETERS")
+    eval_test(tn, nil, nil, irc.less_params("USER"))
+
+# RESET_USER_AFTER_REGISTRATION
+# Client cannot reset user information after registered
+
+    tn = test_name("RESET_USER_AFTER_REGISTRATION")
+    eval_test(tn, nil, nil, irc.reset_user())
+
+############## CHANNAME_ERRORS ###################
+# INVALID_CHANNAME
 # <channel> ::= ('#' | '&') <chstring>
 # <channel> cannot consist of more than 9 characters
 
@@ -527,8 +610,6 @@ begin
    msg = str = "a" * 1000
    irc2.send_privmsg("rui", msg)
    eval_test(tn, nil, nil, irc.checkmsg("rui2", "rui", msg))
-
-############## LONG_PRIVMSG ###################
 
 # Things you might want to test:
 #  - Multiple clients in a channel
