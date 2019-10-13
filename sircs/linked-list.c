@@ -83,11 +83,11 @@ Node* find_item(LinkedList* list, void* item)
         if (iter_get_item(it) == item)
         {
             Node* node = iter_get_node(it);
-            iter_clean(it);
+            ITER_END(it);
             return node;
         }
     }
-    iter_clean(it);
+    ITER_END(it);
     return NULL;
 }
 

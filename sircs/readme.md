@@ -52,6 +52,8 @@ We have placed the word `CHOICE` next to the code for which the RFC does not spe
 
 <!-- 4. If a client parts a channel (both explicitly it was a PART message or implicitly if the client joins another channel), we echo PART instead of QUIT to channel -->
 
+4. If a client attempts to set the same nickname, no reply is generated.
+
 
 ## Known Issues
 1. Depending on the timing of disconnection, the function `vreply()` may segfault.

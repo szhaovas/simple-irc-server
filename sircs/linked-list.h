@@ -75,6 +75,8 @@ void* iter_drop_curr(Iterator_LinkedList* it);
     Iterator_LinkedList* it; \
     for (it = iter(list); !iter_empty(it); iter_next(it))
 
+#define ITER_END(it) do { iter_clean(it); } while (0)
+
 
 #endif /* _LINKED_LIST_H_ */
 
