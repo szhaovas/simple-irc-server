@@ -734,43 +734,48 @@ void cmdJoin(CMD_ARGS)
  */
 void cmdPart(CMD_ARGS)
 {
-    char* channel_to_part = params[0];
-    char* comma = strchr(channel_to_part, ',');
-    if (comma)
-        *comma = '\0'; // Replace ',' with '\0' to take only the first target
-    
-    // Find the channel the client wishes to part
-    channel_t* ch_found = find_channel_by_name(server_info, channel_to_part);
-    if (!ch_found) // ERROR - No such channel
+    char *to_free, *ch_list;
+    to_free = ch_list = strdup(params[0]);
+    char *ch_name = strtok(ch_list, ",");
+    while (ch_name)
     {
-        GET_SAFE_NAME(safe_chname, channel_to_part);
-        reply(server_info, cli, cli_node,
-              ":%s %d %s %s :No such channel\r\n",
-              server_info->hostname,
-              ERR_NOSUCHCHANNEL,
-              cli->nick,
-              safe_chname);
+        // Find the channel the client wishes to part
+        channel_t* ch_found = find_channel_by_name(server_info, ch_name);
+        if (!ch_found) // ERROR - No such channel
+        {
+            GET_SAFE_NAME(safe_chname, ch_name);
+            reply(server_info, cli, cli_node,
+                  ":%s %d %s %s :No such channel\r\n",
+                  server_info->hostname,
+                  ERR_NOSUCHCHANNEL,
+                  cli->nick,
+                  safe_chname);
+        }
+        // Channel found
+        else if ( !find_item(ch_found->members, cli) ) // ERROR - Not on channel
+        {
+            reply(server_info, cli, cli_node,
+                  ":%s %d %s %s :You're not on that channel\r\n",
+                  server_info->hostname,
+                  ERR_NOTONCHANNEL,
+                  cli->nick,
+                  ch_found->name);
+        }
+        else // Client is indeed in the channel to part
+        {
+            // ECHO - QUIT to channel members
+            echo_message(server_info, cli, TRUE,
+                         ":%s!%s@%s QUIT :\r\n", // CHOICE: The joiner also gets back QUIT
+                         cli->nick,
+                         cli->user,
+                         cli->hostname);
+            
+            remove_client_from_channel(server_info, cli, cli_node);
+            cli->channel = NULL;
+        }
+        ch_name = strtok(NULL, ",");
     }
-    else if ( !find_item(ch_found->members, cli) ) // ERROR - Not on channel
-    {
-        reply(server_info, cli, cli_node,
-              ":%s %d %s %s :You're not on that channel\r\n",
-              server_info->hostname,
-              ERR_NOTONCHANNEL,
-              cli->nick,
-              ch_found->name);
-    }
-    else // Client is indeed in the channel to part
-    {
-        echo_message(server_info, cli, TRUE,
-                     ":%s!%s@%s QUIT :\r\n", // CHOICE: The joiner also gets back QUIT
-                     cli->nick,
-                     cli->user,
-                     cli->hostname);
-        
-        remove_client_from_channel(server_info, cli, cli_node);
-        cli->channel = NULL;
-    }
+    free(to_free);
 }
 
 
