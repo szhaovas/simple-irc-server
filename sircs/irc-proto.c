@@ -83,6 +83,15 @@ void vreply(server_info_t* server_info,  client_t* cli,
 {
     if (!cli->zombie)
     {
+        // Copy args for debug printing
+        va_list args_copy;
+        va_copy(args_copy, args);
+        DEBUG_PRINTF(DEBUG_REPLIES, ">>>>> Reply >>>>>>>>>\n");
+        DEBUG_VPRINTF(DEBUG_REPLIES, format, args_copy);
+        DEBUG_PRINTF(DEBUG_REPLIES, "<<<<< Reply End <<<<<\n\n");
+        va_end(args_copy);
+        
+        // Write to client socket and check errors
         if (vdprintf(cli->sock, format, args) < 0)
         {
             // Mark client as zombie, and add to the list of zombies
@@ -91,10 +100,6 @@ void vreply(server_info_t* server_info,  client_t* cli,
             // ECHO - QUIT
             cmdQuit(server_info, cli, NULL, 0);
         }
-    }
-    else
-    {
-        // DELETE: DEBUG
     }
 }
 
@@ -126,7 +131,7 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
     char *prefix = NULL, *command, *pstart, *params[MAX_MSG_TOKENS];
     int nparams = 0;
     char *trailing = NULL;
-    DPRINTF(DEBUG_INPUT, "Handling line: %s\n", line);
+    DEBUG_PRINTF(DEBUG_INPUT, "Handling line: %s\n", line);
     command = line;
     if (*line == ':'){
         prefix = ++line;
@@ -184,13 +189,13 @@ void handleLine(char* line, server_info_t* server_info, client_t* cli)
     if (trailing && nparams < MAX_MSG_TOKENS){
         params[nparams++] = trailing;
     }
-    DPRINTF(DEBUG_INPUT, "Prefix:  %s\nCommand: %s\nParams (%d):\n",
+    DEBUG_PRINTF(DEBUG_INPUT, "Prefix:  %s\nCommand: %s\nParams (%d):\n",
             prefix ? prefix : "<none>", command, nparams);
     int i;
     for (i = 0; i < nparams; i++){
-        DPRINTF(DEBUG_INPUT, "   %s\n", params[i]);
+        DEBUG_PRINTF(DEBUG_INPUT, "   %s\n", params[i]);
     }
-    DPRINTF(DEBUG_INPUT, "\n");
+    DEBUG_PRINTF(DEBUG_INPUT, "\n");
     // Ignore a command if provided with a prefix different from the client's nickname
     if (prefix && *cli->nick && !strcmp(prefix, cli->nick))
     return;

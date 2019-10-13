@@ -7,8 +7,12 @@
 
 #ifdef DEBUG
 extern unsigned int debug;
-#define DPRINTF(level, fmt, args...) \
+#define DEBUG_PRINTF(level, fmt, args...) \
         do { if (debug & (level)) fprintf(stderr, fmt , ##args ); } while(0)
+
+#define DEBUG_VPRINTF(level, fmt, va_args) \
+        do { if (debug & (level)) vfprintf(stderr, fmt , va_args ); } while(0)
+
 #define DEBUG_PERROR(errmsg) \
         do { if (debug & DEBUG_ERRS) perror(errmsg); } while(0)
 #else
@@ -29,6 +33,7 @@ extern unsigned int debug;
 #define DEBUG_CLIENTS   0x10  // DBTEXT:  Debug client arrival/depart
 #define DEBUG_COMMANDS  0x20  // DBTEXT:  Debug client commands
 #define DEBUG_CHANNELS  0x40  // DBTEXT:  Debug channel operations
+#define DEBUG_REPLIES   0x80  // DBTEXT:  Debug server replies
 
 #define DEBUG_ALL  0xffffffff
 

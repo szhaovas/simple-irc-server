@@ -29,7 +29,7 @@ int main(int argc, char *argv[] ){
     
     signal(SIGPIPE, SIG_IGN); /* Block SIGPIPE Signals */
     
-    DPRINTF(DEBUG_INIT, "Hello\n");
+    DEBUG_PRINTF(DEBUG_INIT, "Hello\n");
     
     // Parse args
     extern char *optarg;
@@ -133,7 +133,7 @@ int main(int argc, char *argv[] ){
     init_list(channels);
     server_info.channels = channels;
     
-    DPRINTF(DEBUG_INIT, "Simple IRC server listening on %s:%d, fd=%d\n",
+    DEBUG_PRINTF(DEBUG_INIT, "Simple IRC server listening on %s:%d, fd=%d\n",
             server_info.hostname,
             port,
             listenfd);
@@ -147,12 +147,12 @@ int main(int argc, char *argv[] ){
         
         if (ready == 0)
         {
-            DPRINTF(DEBUG_CLIENTS, ".");
+            DEBUG_PRINTF(DEBUG_CLIENTS, ".");
             fflush(stdout);
         }
         else // ready > 0
         {
-            DPRINTF(DEBUG_CLIENTS, "\n");
+            DEBUG_PRINTF(DEBUG_CLIENTS, "\n");
             // Accept a new connection
             if (FD_ISSET(listenfd, &fds))
             {
@@ -163,19 +163,13 @@ int main(int argc, char *argv[] ){
             {
                 client_t* cli = (client_t *) iter_get_item(it);
                 {
-                    int sock = cli->sock;
-                    if (FD_ISSET(sock, &fds))
+                    DEBUG_PRINTF(DEBUG_CLIENTS, "Active fd=%i\n", cli->sock);
+                    __rc = handle_data(&server_info, cli, cli_node);
+                    // If something went wrong, fake a QUIT command
+                    if (__rc < 0)
                     {
-                        DPRINTF(DEBUG_CLIENTS, "Active fd=%i\n", sock);
-                        __rc = handle_data(&server_info, cli);
-                        // If something went wrong,
-                        // close this connection and remove associated state info
-                        if (__rc < 0)
-                        {
-                            DPRINTF(DEBUG_CLIENTS, "Client fd=%i closed the connection\n", sock);
-                            cli->registered = 1; // Ugly but quick fix
-                            handleLine("QUIT", &server_info, cli);
-                        }
+                        cli->registered = 1; // Ugly but quick fix
+                        handleLine("QUIT", &server_info, cli);
                     }
                 }
             } /* Iterator loop */
@@ -259,7 +253,7 @@ int handle_new_connection(int listenfd, LinkedList* clients)
     }
     if (clients->size == MAX_CLIENTS)
     {
-        DPRINTF(DEBUG_SOCKETS, "No room for new connections\n");
+        DEBUG_PRINTF(DEBUG_SOCKETS, "No room for new connections\n");
         close(sock);
         return -1;
     }
@@ -297,7 +291,7 @@ int handle_new_connection(int listenfd, LinkedList* clients)
     memcpy(&(cli->cliaddr), &cli_addr, sizeof(cli_addr));
     cli->inbuf_size = 0;
     
-    DPRINTF(DEBUG_CLIENTS, "New client from %s, fd=%i\n",
+    DEBUG_PRINTF(DEBUG_CLIENTS, "New client from %s, fd=%i\n",
             cli->hostname,
             cli->sock);
     
@@ -334,14 +328,14 @@ int handle_data(server_info_t* server_info, client_t* cli)
     // Connection closed by client (EOF)
     else if (bytes_read == 0)
     {
-        DPRINTF(DEBUG_INPUT, "EOF\n");
+        DEBUG_PRINTF(DEBUG_INPUT, "EOF\n");
         return -1;
     }
     // Print received contents
-    DPRINTF(DEBUG_INPUT, "<< Got:   %s\n", buf);
-    DPRINTF(DEBUG_INPUT, "<< Bytes: ");
+    DEBUG_PRINTF(DEBUG_INPUT, "<< Got:   %s\n", buf);
+    DEBUG_PRINTF(DEBUG_INPUT, "<< Bytes: ");
     print_hex(DEBUG_INPUT, buf, MAX_MSG_LEN+1);
-    DPRINTF(DEBUG_INPUT, "\n");
+    DEBUG_PRINTF(DEBUG_INPUT, "\n");
     
     char *msg = cli->inbuf; // start of a (potential) msg
     char *cr, *lf, *end;
@@ -358,9 +352,9 @@ int handle_data(server_info_t* server_info, client_t* cli)
             end = MIN(cr, lf);
         *end = '\0';
         
-        DPRINTF(DEBUG_INPUT, "Msg: %s\n", msg);
+        DEBUG_PRINTF(DEBUG_INPUT, "Msg: %s\n", msg);
 //        print_hex(DEBUG_INPUT, msg, MAX_MSG_LEN);
-//        DPRINTF(DEBUG_INPUT, "\n");
+//        DEBUG_PRINTF(DEBUG_INPUT, "\n");
 
         handleLine(msg, server_info, cli);
         
@@ -389,9 +383,9 @@ int handle_data(server_info_t* server_info, client_t* cli)
         strcpy(cli->inbuf, tmp);
         cli->inbuf_size = (unsigned) strlen(cli->inbuf);
         
-        DPRINTF(DEBUG_INPUT, "Incomplete msg: %s\n", cli->inbuf);
+        DEBUG_PRINTF(DEBUG_INPUT, "Incomplete msg: %s\n", cli->inbuf);
         print_hex(DEBUG_INPUT, cli->inbuf, MAX_MSG_LEN);
-        DPRINTF(DEBUG_INPUT, "\n");
+        DEBUG_PRINTF(DEBUG_INPUT, "\n");
     }
     return 0;
 }
