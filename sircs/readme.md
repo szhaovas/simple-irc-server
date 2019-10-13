@@ -56,9 +56,13 @@ We have placed the word `CHOICE` next to the code for which the RFC does not spe
 
 8. Command USER: If the client issues multiple USER commands before being registered (i.e. issuing a valid NICK command), then existing client information is silently overwritten by each USER command.
 
-10. Command JOIN & PART: If a client parts a channel (both explicitly if the command was PART, or implicitly if the client switches to another channel), we always echo QUIT to the channel members, including the client him/herself (even though PART would be a more logical choice here).
+9. Command JOIN: If the parameter is a list of channels, we only attempt to make the client join the first channel, and ignore the rest.
 
-11. Command PRIVMSG: When there aren't enough params, there is no way to tell between a target name and the text to send. Thus, we assume that the first param is the target name, i.e.,
+10. Command PART: If the parameter is a list of channels, we attempt to remove the client from each channel (even though the client can be a member of at most one channel from the list). For each channel of which the client is not a member, we give a not-on-channel error.
+
+11. Command JOIN & PART: If a client parts a channel (both explicitly if the command was PART, or implicitly if the client switches to another channel), we always echo QUIT to the channel members, including the client him/herself (even though PART would be a more logical choice here).
+
+12. Command PRIVMSG: When there aren't enough params, there is no way to tell between a target name and the text to send. Thus, we assume that the first param is the target name, i.e.,
     - If no parameter is specified, then we reply ERR_NORECIPIENT.
     - If only one parameter is specified, then we reply ERR_NOTEXTTOSEND.
 
