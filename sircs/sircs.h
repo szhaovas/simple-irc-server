@@ -44,7 +44,7 @@ struct __client_struct {
     Node* node_clients;
     Node* node_members;
     char hostname[MAX_HOSTNAME];
-    char servername[MAX_SERVERNAME]; // FIXME: not used, so can be removed
+    char servername[MAX_SERVERNAME]; // Not used, so can be removed
     char user[MAX_USERNAME];
     char nick[MAX_USERNAME];
     char realname[MAX_REALNAME];

@@ -1,1 +1,3 @@
-File containing documentation of your test cases and any known issues your server has.
+We added and commented our test cases in `sircs-tester.rb`. 
+
+Due to time pressure we do not have enough test cases to cover every possible code path, and we did not stress-test our server with large numbers of clients and channels.
