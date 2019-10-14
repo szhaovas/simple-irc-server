@@ -1,0 +1,5 @@
+We added and commented our test cases in `sircs-tester.rb`. Please refer to this file for descriptions of our test cases.
+
+Please see `readme.md` for a list of known issues.
+
+Due to time pressure we do not have enough test cases to cover every possible code path, and we did not stress-test our server with large numbers of clients and channels.

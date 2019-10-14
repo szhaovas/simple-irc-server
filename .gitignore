@@ -9,12 +9,13 @@ Icon
 # macOS - Thumbnails
 ._*
 
-# VS Code
+# IDEs
 */.vscode
-sircs/sircs-xcode/sircs.xcodeproj/project.xcworkspace/xcuserdata/
-sircs/sircs-xcode/sircs.xcodeproj/xcuserdata/
+sircs-xcode/sircs.xcodeproj/project.xcworkspace/xcuserdata/
+sircs-xcode/sircs.xcodeproj/xcuserdata/
 
 # Project-specific files
+sircc/
 */*-server
 */*-client
 */sircc
