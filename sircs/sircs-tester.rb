@@ -362,10 +362,10 @@ class IRC
       end
   end
 
-  def invalid_chan(s)
-      send("JOIN #{s}")
+  def invalid_chan(cmd, s)
+      send("#{cmd} #{s}")
 
-      data = recv_data_from_server(5);
+      data = recv_data_from_server(1);
 
       ss = s[0,9]
 
@@ -373,9 +373,76 @@ class IRC
           return true
       else
           puts data
-          puts "JOIN " +s+ " should return ERR_NOSUCHCHANNEL and nothing more"
+          puts "#{cmd} #{s} should return ERR_NOSUCHCHANNEL and nothing more"
           return false
       end
+  end
+
+  def not_on_chan(s)
+      send("PART #{s}")
+
+      data = recv_data_from_server(1);
+
+      if(data.size == 1 and data[0] =~ /^:[^ ]+ *442 *rui2 *#{s} *:You're not on that channel */)
+          return true
+      else
+          puts data
+          puts "PART #{s} should return ERR_NOTONCHANNEL and nothing more"
+          return false
+      end
+  end
+
+  def no_recipient()
+      send("PRIVMSG")
+
+      data = recv_data_from_server(1);
+
+      if(data.size == 1 and data[0] =~ /^:[^ ]+ *411 *rui *:No recipient given \(PRIVMSG\) */)
+          return true
+      else
+          puts data
+          puts "PRIVMSG given no param should return ERR_NORECIPIENT and nothing more"
+          return false
+      end
+  end
+
+  def no_text()
+      send("PRIVMSG rui2")
+
+      data = recv_data_from_server(1);
+
+      if(data.size == 1 and data[0] =~ /^:[^ ]+ *412 *rui *:No text to send */)
+          return true
+      else
+          puts data
+          puts "PRIVMSG given one param should return ERR_NOTEXTTOSEND and nothing more"
+          return false
+      end
+  end
+
+  def nonexistent_target(s)
+      ls = s[0]
+      i = 1
+      while i < s.length
+          ls += ",#{s[i]}"
+          i += 1
+      end
+
+      send("PRIVMSG #{ls} hi")
+
+      data = recv_data_from_server(1);
+
+      i = 0
+      while i < s.length
+          if (not data[i] =~ /^:[^ ]+ *401 *rui *#{s[i]} *:No such nick\/channel */)
+              puts data
+              puts "PRIVMSG should return ERR_NOSUCHNICK for each of the non-existent targets and nothing more"
+              return false
+          end
+          i += 1
+      end
+
+      return true
   end
 
 end
@@ -553,7 +620,7 @@ begin
 
 ## Your tests go here!
 
-############## NICKNAME_ERRORS ###################
+############## NICK_ERRORS ###################
 # INVALID_NICKNAME
 # <nick> ::= <letter> { <letter> | <number> | <special> }
 # <nick> cannot consist of more than 9 characters
@@ -583,7 +650,7 @@ begin
 # NOT_ENOUGH_PARAMETERS
 # USER <less than 4 params> should return ERR_NEEDMOREPARAMS
 
-    tn = test_name("NOT_ENOUGH_PARAMETERS")
+    tn = test_name("USER_NOT_ENOUGH_PARAMETERS")
     eval_test(tn, nil, nil, irc.less_params("USER"))
 
 # RESET_USER_AFTER_REGISTRATION
@@ -592,24 +659,70 @@ begin
     tn = test_name("RESET_USER_AFTER_REGISTRATION")
     eval_test(tn, nil, nil, irc.reset_user())
 
-############## CHANNAME_ERRORS ###################
+############## JOIN_ERRORS ###################
+# NOT_ENOUGH_PARAMETERS
+# JOIN <blank> should return ERR_NEEDMOREPARAMS
+
+    tn = test_name("JOIN_NOT_ENOUGH_PARAMETERS")
+    eval_test(tn, nil, nil, irc.less_params("JOIN"))
+
 # INVALID_CHANNAME
 # <channel> ::= ('#' | '&') <chstring>
 # <channel> cannot consist of more than 9 characters
 
-   tn = test_name("NO_LEADING_#&")
-   eval_test(tn, nil, nil, irc.invalid_chan("channel"))
+   tn = test_name("JOIN_NO_LEADING_#&")
+   eval_test(tn, nil, nil, irc.invalid_chan("JOIN", "channel"))
 
-   tn = test_name("LONG_CHANNAME")
-   eval_test(tn, nil, nil, irc.invalid_chan("#lololololololololololololololo"))
+   tn = test_name("JOIN_LONG_CHANNAME")
+   eval_test(tn, nil, nil, irc.invalid_chan("JOIN", "#lololololololololololololololo"))
 
-############## LONG_PRIVMSG ###################
-# When sending a very long PRIVMSG, the message should
-# be split and sent in multiple patches
-   tn = test_name("LONG_PRIVMSG")
-   msg = str = "a" * 1000
-   irc2.send_privmsg("rui", msg)
-   eval_test(tn, nil, nil, irc.checkmsg("rui2", "rui", msg))
+############## PART_ERRORS ###################
+# NOT_ENOUGH_PARAMETERS
+# PART <blank> should return ERR_NEEDMOREPARAMS
+
+    tn = test_name("PART_NOT_ENOUGH_PARAMETERS")
+    eval_test(tn, nil, nil, irc.less_params("PART"))
+
+# INVALID_CHANNAME
+# <channel> ::= ('#' | '&') <chstring>
+# <channel> cannot consist of more than 9 characters
+# should also return ERR_NOSUCHCHANNEL if channame is valid but chan hasn't been created
+
+   tn = test_name("PART_NO_LEADING_#&")
+   eval_test(tn, nil, nil, irc.invalid_chan("PART", "channel"))
+
+   tn = test_name("PART_LONG_CHANNAME")
+   eval_test(tn, nil, nil, irc.invalid_chan("PART", "#lololololololololololololololo"))
+
+   tn = test_name("NONEXISTENT_CHAN")
+   eval_test(tn, nil, nil, irc.invalid_chan("PART", "#nosuchchan"))
+
+# NOT_ON_CHANNEL
+# A client cannot part from a channel if it is not on the channel
+
+   tn = test_name("NOT_ON_CHANNEL")
+   eval_test(tn, nil, nil, irc2.not_on_chan("#linux"))
+
+############## PRIVMSG_ERRORS ###################
+# GIVE_NO_PARAM
+# Since there is no way to distinguish between target and text_to_send, we choose
+#     to return ERR_NORECIPIENT when no param is given, and ERR_NOTEXTTOSEND when
+#     1 param is given.
+
+    tn = test_name("GIVE_NO_PARAM")
+    eval_test(tn, nil, nil, irc.no_recipient())
+
+# GIVE_ONE_PARAM
+# See GIVE_NO_PARAM
+
+    tn = test_name("GIVE_ONE_PARAM")
+    eval_test(tn, nil, nil, irc.no_text())
+
+# SEND_TO_NONEXISTENT_TARGET
+
+    targets = ["rui4", "#linux2"]
+    tn = test_name("SEND_TO_NONEXISTENT_TARGET")
+    eval_test(tn, nil, nil, irc.nonexistent_target(targets))
 
 # Things you might want to test:
 #  - Multiple clients in a channel
