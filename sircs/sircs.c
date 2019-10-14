@@ -104,9 +104,9 @@ int main(int argc, char *argv[] ){
     fd_set fds;
     
     // Time-out
-    struct timeval timeout;
-    timeout.tv_sec = 1;
-    timeout.tv_usec = 0;
+    //    struct timeval timeout; // FIXME: does not work on Linux
+    //    timeout.tv_sec = 1;
+    //    timeout.tv_usec = 0;
     
     
     /* Initialize server_info struct */
@@ -142,7 +142,7 @@ int main(int argc, char *argv[] ){
     while (TRUE)
     {
         int highfd = build_fd_set(&fds, listenfd, server_info.clients);
-        int ready  = select(highfd + 1, &fds, (fd_set *) 0, (fd_set *) 0, &timeout);
+        int ready  = select(highfd + 1, &fds, (fd_set *) 0, (fd_set *) 0, NULL);
         exit_on_error(ready, "select() failed");
         
         if (ready == 0)
