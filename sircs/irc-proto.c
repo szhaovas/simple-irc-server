@@ -27,9 +27,9 @@ typedef void (*cmd_handler_t)(CMD_ARGS);
 
 // Server reply macro
 #define GET_SAFE_NAME(safe_name, unsafe_name) \
-char safe_name[RFC_MAX_NICKNAME+1]; \
-safe_name[RFC_MAX_NICKNAME] = '\0'; \
-strncpy(safe_name, unsafe_name, RFC_MAX_NICKNAME);
+    char safe_name[RFC_MAX_NICKNAME+1]; \
+    safe_name[RFC_MAX_NICKNAME] = '\0'; \
+    strncpy(safe_name, unsafe_name, RFC_MAX_NICKNAME);
 
 // Message of the day
 #define MOTD_STR "ようこそ、OZの世界へ"
@@ -617,7 +617,7 @@ void cmdQuit(CMD_ARGS)
     if (!cli->zombie)
     {
         cli->zombie = TRUE;
-        add_item(server_info->zombies, cli); // Backward pointer to server's zombie list
+        add_item(server_info->zombies, cli);
     }
     // Else, the command was faked by the server,
     // in which case the client has already been duly marked as a zombie.
